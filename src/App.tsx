@@ -1,51 +1,54 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { Toolbar } from "./components/Toolbar";
+import { AssetLibrary } from "./components/AssetLibrary";
+import { MetadataView } from "./components/MetadataView";
+import { useProjectStore } from "./store/projectStore";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+function ProjectInfo() {
+  const { projectFile, projectDir } = useProjectStore();
+  if (!projectFile) return null;
+  const { project } = projectFile;
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <div className="px-4 py-2 bg-zinc-900/50 border-b border-zinc-800 text-xs text-zinc-500 flex gap-4">
+      <span>分辨率: {project.settings.resolution.width}×{project.settings.resolution.height}</span>
+      <span>帧率: {project.settings.fps} fps</span>
+      <span>采样率: {project.settings.sampleRate} Hz</span>
+      <span className="ml-auto">{projectDir}</span>
+    </div>
   );
 }
 
-export default App;
+function ErrorBanner() {
+  const { error, clearError } = useProjectStore();
+  if (!error) return null;
+
+  return (
+    <div className="px-4 py-2 bg-red-900/50 border-b border-red-800 text-xs text-red-300 flex items-center justify-between">
+      <span>错误: {error}</span>
+      <button
+        onClick={clearError}
+        className="px-2 py-0.5 text-xs bg-red-800 hover:bg-red-700 rounded"
+      >
+        关闭
+      </button>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
+      <Toolbar />
+      <ErrorBanner />
+      <ProjectInfo />
+      <div className="flex flex-1 overflow-hidden">
+        <div className="w-80 border-r border-zinc-800 flex flex-col">
+          <AssetLibrary />
+        </div>
+        <div className="flex-1 flex flex-col">
+          <MetadataView />
+        </div>
+      </div>
+    </div>
+  );
+}
