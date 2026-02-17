@@ -174,7 +174,7 @@ fn import_assets(project_dir: String, file_paths: Vec<String>) -> Result<Vec<Ass
         };
 
         let asset = Asset {
-            asset_id: format!("ast_{}_{}", asset_type, uuid::Uuid::new_v4().to_string().replace("-", "")[..8].to_string()),
+            asset_id: format!("ast_{}_{}", asset_type, &uuid::Uuid::new_v4().to_string().replace("-", "")[..8]),
             asset_type: asset_type.clone(),
             source: "uploaded".to_string(),
             fingerprint: fp,
