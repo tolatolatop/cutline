@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { Toolbar } from "./components/Toolbar";
 import { AssetLibrary } from "./components/AssetLibrary";
 import { MetadataView } from "./components/MetadataView";
-import { useProjectStore } from "./store/projectStore";
+import { TaskPanel } from "./components/TaskPanel";
+import { useProjectStore, initEventSubscriptions } from "./store/projectStore";
 
 function ProjectInfo() {
   const { projectFile, projectDir } = useProjectStore();
@@ -10,7 +12,10 @@ function ProjectInfo() {
 
   return (
     <div className="px-4 py-2 bg-zinc-900/50 border-b border-zinc-800 text-xs text-zinc-500 flex gap-4">
-      <span>分辨率: {project.settings.resolution.width}×{project.settings.resolution.height}</span>
+      <span>
+        分辨率: {project.settings.resolution.width}x
+        {project.settings.resolution.height}
+      </span>
       <span>帧率: {project.settings.fps} fps</span>
       <span>采样率: {project.settings.sampleRate} Hz</span>
       <span className="ml-auto">{projectDir}</span>
@@ -36,17 +41,29 @@ function ErrorBanner() {
 }
 
 export default function App() {
+  useEffect(() => {
+    initEventSubscriptions();
+  }, []);
+
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
       <Toolbar />
       <ErrorBanner />
       <ProjectInfo />
       <div className="flex flex-1 overflow-hidden">
+        {/* Left: Asset Library */}
         <div className="w-80 border-r border-zinc-800 flex flex-col">
           <AssetLibrary />
         </div>
+
+        {/* Center: Metadata */}
         <div className="flex-1 flex flex-col">
           <MetadataView />
+        </div>
+
+        {/* Right: Task Panel */}
+        <div className="w-80 border-l border-zinc-800 flex flex-col">
+          <TaskPanel />
         </div>
       </div>
     </div>

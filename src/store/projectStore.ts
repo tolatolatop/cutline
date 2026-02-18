@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import type { ProjectFile } from "../models/project";
+import type { ProjectFile, Task } from "../models/project";
 import * as commands from "../services/commands";
+import { subscribeTaskUpdates, subscribeProjectUpdates } from "../services/events";
 
 interface ProjectState {
   projectFile: ProjectFile | null;
@@ -15,8 +16,10 @@ interface ProjectState {
   openProject: (projectJsonPath: string) => Promise<void>;
   saveProject: () => Promise<void>;
   importAssets: (filePaths: string[]) => Promise<void>;
+  refreshProject: () => Promise<void>;
   selectAsset: (assetId: string | null) => void;
   clearError: () => void;
+  updateTask: (task: Task) => void;
 }
 
 function rebuildIndexes(pf: ProjectFile): ProjectFile {
@@ -79,41 +82,76 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   saveProject: async () => {
-    const { projectFile, projectJsonPath } = get();
-    if (!projectFile || !projectJsonPath) return;
+    const { projectFile } = get();
+    if (!projectFile) return;
     set({ loading: true, error: null });
     try {
-      const updated = rebuildIndexes({
-        ...projectFile,
-        project: {
-          ...projectFile.project,
-          updatedAt: new Date().toISOString(),
-        },
-      });
-      await commands.saveProject(projectJsonPath, updated);
-      set({ projectFile: updated, isDirty: false, loading: false });
+      await commands.saveProject();
+      const fresh = await commands.getProject();
+      set({ projectFile: fresh, isDirty: false, loading: false });
     } catch (e) {
       set({ error: String(e), loading: false });
     }
   },
 
   importAssets: async (filePaths) => {
-    const { projectFile, projectDir } = get();
-    if (!projectFile || !projectDir) return;
+    const { projectFile } = get();
+    if (!projectFile) return;
     set({ loading: true, error: null });
     try {
-      const newAssets = await commands.importAssets(projectDir, filePaths);
-      const allAssets = [...projectFile.assets, ...newAssets];
-      const updated = rebuildIndexes({
-        ...projectFile,
-        assets: allAssets,
-      });
-      set({ projectFile: updated, isDirty: true, loading: false });
+      await commands.importAssets(filePaths);
+      const fresh = await commands.getProject();
+      set({ projectFile: fresh, isDirty: false, loading: false });
     } catch (e) {
       set({ error: String(e), loading: false });
     }
   },
 
+  refreshProject: async () => {
+    try {
+      const fresh = await commands.getProject();
+      set({ projectFile: fresh });
+    } catch {
+      // Project might not be loaded yet
+    }
+  },
+
   selectAsset: (assetId) => set({ selectedAssetId: assetId }),
   clearError: () => set({ error: null }),
+
+  updateTask: (task: Task) => {
+    const { projectFile } = get();
+    if (!projectFile) return;
+
+    const idx = projectFile.tasks.findIndex((t) => t.taskId === task.taskId);
+    const newTasks = [...projectFile.tasks];
+    if (idx >= 0) {
+      newTasks[idx] = task;
+    } else {
+      newTasks.push(task);
+    }
+
+    set({
+      projectFile: rebuildIndexes({ ...projectFile, tasks: newTasks }),
+    });
+  },
 }));
+
+// Global event subscriptions (set up once)
+let _unsubscribers: Array<() => void> = [];
+
+export async function initEventSubscriptions() {
+  // Clean up previous subscriptions
+  _unsubscribers.forEach((fn) => fn());
+  _unsubscribers = [];
+
+  const unsubTask = await subscribeTaskUpdates((task) => {
+    useProjectStore.getState().updateTask(task);
+  });
+  _unsubscribers.push(unsubTask);
+
+  const unsubProject = await subscribeProjectUpdates(() => {
+    useProjectStore.getState().refreshProject();
+  });
+  _unsubscribers.push(unsubProject);
+}

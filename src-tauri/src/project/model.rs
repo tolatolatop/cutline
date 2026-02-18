@@ -95,22 +95,77 @@ pub struct GenerationInfo {
     pub params: serde_json::Value,
 }
 
-// --- Task (v0: type definitions only) ---
+// --- Task v1 ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Task {
     pub task_id: String,
-    #[serde(rename = "type")]
-    pub task_type: String,
-    pub status: String,
+    pub kind: String,
+    pub state: String,
     pub created_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub completed_at: Option<String>,
+    pub updated_at: String,
     pub input: serde_json::Value,
-    pub segments: Vec<serde_json::Value>,
-    pub output_assets: Vec<String>,
-    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<TaskProgress>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<TaskError>,
+    pub retries: TaskRetries,
+    pub deps: Vec<String>,
+    pub events: Vec<TaskEvent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dedupe_key: Option<String>,
+}
+
+pub const MAX_TASK_EVENTS: usize = 200;
+
+impl Task {
+    pub fn append_event(&mut self, level: &str, msg: &str) {
+        self.events.push(TaskEvent {
+            t: chrono::Utc::now().to_rfc3339(),
+            level: level.to_string(),
+            msg: msg.to_string(),
+        });
+        if self.events.len() > MAX_TASK_EVENTS {
+            let drain_count = self.events.len() - MAX_TASK_EVENTS;
+            self.events.drain(0..drain_count);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskProgress {
+    pub phase: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub percent: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskError {
+    pub code: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRetries {
+    pub count: u32,
+    pub max: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskEvent {
+    pub t: String,
+    pub level: String,
+    pub msg: String,
 }
 
 // --- Timeline ---

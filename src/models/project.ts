@@ -112,54 +112,58 @@ export interface GenerationInfo {
   params: Record<string, unknown>;
 }
 
-// --- 任务（v0 类型定义，留空）---
-export type TaskType = "image" | "video" | "audio";
-export type TaskStatus = "pending" | "running" | "completed" | "failed";
+// --- 任务 v1 ---
+export type TaskKind = "probe" | "thumb" | "proxy" | "generate" | "export";
+export type TaskState = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
-export interface TaskInput {
-  promptAssetId?: string;
-  prompt?: {
-    text: string;
-    useTimelinePrompts?: boolean;
-  };
-  referenceAssets?: Array<{
-    assetId: string;
-    role: string;
-    range?: { start: number; end: number };
-  }>;
+export interface TaskProgress {
+  phase: string;
+  percent?: number;
+  message?: string;
 }
 
-export interface TaskSegment {
-  index: number;
-  timeRange: { start: number; end: number };
-  keyframes?: {
-    startAssetId: string;
-    endAssetId: string;
-  };
-  reference?: {
-    useStartFrame: boolean;
-    useEndFrame: boolean;
-    startFrameAssetId?: string;
-    endFrameAssetId?: string;
-  };
-  outputVideoAssetId?: string;
-  promptContext?: {
-    fromTimeline: boolean;
-    windowSec: number;
-    text: string;
-  };
+export interface TaskError {
+  code: string;
+  message: string;
+  detail?: string;
+}
+
+export interface TaskRetries {
+  count: number;
+  max: number;
+}
+
+export interface TaskEvent {
+  t: string;
+  level: "info" | "warn" | "error";
+  msg: string;
 }
 
 export interface Task {
   taskId: string;
-  type: TaskType;
-  status: TaskStatus;
+  kind: TaskKind;
+  state: TaskState;
   createdAt: string;
-  completedAt?: string;
-  input: TaskInput;
-  segments: TaskSegment[];
-  outputAssets: string[];
-  error: string | null;
+  updatedAt: string;
+  input: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  progress?: TaskProgress;
+  error?: TaskError;
+  retries: TaskRetries;
+  deps: string[];
+  events: TaskEvent[];
+  dedupeKey?: string;
+}
+
+export interface TaskSummary {
+  taskId: string;
+  kind: TaskKind;
+  state: TaskState;
+  createdAt: string;
+  updatedAt: string;
+  progress?: TaskProgress;
+  error?: TaskError;
+  retries: TaskRetries;
 }
 
 // --- 时间轴 ---
