@@ -347,6 +347,27 @@ fn probe_media(file_path: String) -> Result<serde_json::Value, String> {
 }
 
 // ============================================================
+// File Access
+// ============================================================
+
+#[tauri::command]
+async fn read_file_base64(
+    relative_path: String,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<String, String> {
+    let guard = state.inner.lock().await;
+    let loaded = guard.as_ref().ok_or("没有打开的项目")?;
+    let abs_path = loaded.project_dir.join(&relative_path);
+    drop(guard);
+
+    let bytes = std::fs::read(&abs_path)
+        .map_err(|e| format!("读取文件失败 {}: {}", abs_path.display(), e))?;
+
+    use base64::Engine;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
+}
+
+// ============================================================
 // Task Commands
 // ============================================================
 
@@ -582,6 +603,7 @@ pub fn run() {
             get_project,
             import_assets,
             probe_media,
+            read_file_base64,
             task_enqueue,
             task_retry,
             task_cancel,

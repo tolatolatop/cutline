@@ -54,3 +54,9 @@ export async function taskCancel(taskId: string): Promise<void> {
 export async function taskList(): Promise<TaskSummary[]> {
   return invoke("task_list");
 }
+
+export async function readFileBase64(
+  relativePath: string
+): Promise<string> {
+  return invoke("read_file_base64", { relativePath });
+}

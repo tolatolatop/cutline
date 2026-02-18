@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useProjectStore } from "../store/projectStore";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { useThumbnail } from "../hooks/useThumbnail";
 import type { Asset, VideoMeta, AudioMeta } from "../models/project";
 
 type ViewMode = "grid" | "list";
@@ -16,13 +16,9 @@ function formatDuration(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function getThumbUri(asset: Asset, projectDir: string | null): string | null {
-  if (!projectDir) return null;
+function getThumbRelativePath(asset: Asset): string | null {
   const meta = asset.meta as unknown as Record<string, unknown>;
-  const thumbUri = meta?.thumbUri as string | undefined;
-  if (!thumbUri) return null;
-  const absPath = `${projectDir}\\${thumbUri.replace(/\//g, "\\")}`;
-  return convertFileSrc(absPath);
+  return (meta?.thumbUri as string) ?? null;
 }
 
 function getDuration(asset: Asset): number | null {
@@ -51,18 +47,30 @@ function assetIcon(type: string) {
   }
 }
 
+function ThumbnailImg({
+  relativePath,
+  alt,
+  className,
+}: {
+  relativePath: string | null;
+  alt?: string;
+  className?: string;
+}) {
+  const dataUrl = useThumbnail(relativePath);
+  if (!dataUrl) return null;
+  return <img src={dataUrl} alt={alt ?? ""} className={className} />;
+}
+
 function AssetGridCard({
   asset,
   selected,
   onSelect,
-  projectDir,
 }: {
   asset: Asset;
   selected: boolean;
   onSelect: () => void;
-  projectDir: string | null;
 }) {
-  const thumbUrl = getThumbUri(asset, projectDir);
+  const thumbPath = getThumbRelativePath(asset);
   const duration = getDuration(asset);
   const resolution = getResolution(asset);
 
@@ -74,12 +82,11 @@ function AssetGridCard({
       }`}
     >
       <div className="aspect-video bg-zinc-800 flex items-center justify-center">
-        {thumbUrl ? (
-          <img
-            src={thumbUrl}
+        {thumbPath ? (
+          <ThumbnailImg
+            relativePath={thumbPath}
             alt={fileName(asset.path)}
             className="w-full h-full object-cover"
-            loading="lazy"
           />
         ) : (
           <span className="text-2xl">{assetIcon(asset.type)}</span>
@@ -111,14 +118,12 @@ function AssetListRow({
   asset,
   selected,
   onSelect,
-  projectDir,
 }: {
   asset: Asset;
   selected: boolean;
   onSelect: () => void;
-  projectDir: string | null;
 }) {
-  const thumbUrl = getThumbUri(asset, projectDir);
+  const thumbPath = getThumbRelativePath(asset);
   const duration = getDuration(asset);
 
   return (
@@ -131,12 +136,10 @@ function AssetListRow({
       }`}
     >
       <div className="w-10 h-10 rounded bg-zinc-800 flex items-center justify-center overflow-hidden shrink-0">
-        {thumbUrl ? (
-          <img
-            src={thumbUrl}
-            alt=""
+        {thumbPath ? (
+          <ThumbnailImg
+            relativePath={thumbPath}
             className="w-full h-full object-cover"
-            loading="lazy"
           />
         ) : (
           <span className="text-base">{assetIcon(asset.type)}</span>
@@ -156,7 +159,7 @@ function AssetListRow({
 }
 
 export function AssetLibrary() {
-  const { projectFile, projectDir, selectedAssetId, selectAsset } =
+  const { projectFile, selectedAssetId, selectAsset } =
     useProjectStore();
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [filterType, setFilterType] = useState<FilterType>("all");
@@ -245,7 +248,6 @@ export function AssetLibrary() {
                 asset={asset}
                 selected={selectedAssetId === asset.assetId}
                 onSelect={() => selectAsset(asset.assetId)}
-                projectDir={projectDir}
               />
             ))}
           </div>
@@ -258,7 +260,6 @@ export function AssetLibrary() {
               asset={asset}
               selected={selectedAssetId === asset.assetId}
               onSelect={() => selectAsset(asset.assetId)}
-              projectDir={projectDir}
             />
           ))}
         </div>
