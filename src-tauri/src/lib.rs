@@ -1,6 +1,8 @@
 mod asset;
 mod media;
 mod project;
+mod provider;
+mod secrets;
 mod state;
 mod task;
 
@@ -53,6 +55,7 @@ async fn create_project(
                 },
                 aspect_ratio: "16:9".to_string(),
                 sample_rate: 48000,
+                generation: None,
             },
             paths: ProjectPaths {
                 workspace_root: "./workspace".to_string(),
@@ -870,6 +873,127 @@ async fn marker_remove(
 }
 
 // ============================================================
+// Project Settings Commands
+// ============================================================
+
+#[tauri::command]
+async fn update_generation_settings(
+    video_provider: Option<String>,
+    video_profile: Option<String>,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let mut guard = state.inner.lock().await;
+    let loaded = guard.as_mut().ok_or("没有打开的项目")?;
+
+    loaded.project.project.settings.generation = Some(
+        project::model::GenerationSettings {
+            video_provider,
+            video_profile,
+        },
+    );
+    loaded.project.project.updated_at = chrono::Utc::now().to_rfc3339();
+    loaded.dirty = true;
+
+    drop(guard);
+    let _ = app_handle.emit("project:updated", ());
+    state.save_notify.notify_one();
+
+    Ok(())
+}
+
+// ============================================================
+// Provider Commands
+// ============================================================
+
+#[tauri::command]
+async fn providers_list(
+    app_handle: tauri::AppHandle,
+) -> Result<Vec<provider::model::ProviderSummary>, String> {
+    let path = provider::io::providers_path(&app_handle)?;
+    let file = provider::io::load_providers(&path)?;
+    let mut list: Vec<provider::model::ProviderSummary> = file
+        .providers
+        .iter()
+        .map(|(name, cfg)| provider::model::ProviderSummary {
+            name: name.clone(),
+            display_name: cfg.display_name.clone(),
+            auth_kind: cfg.auth.kind.clone(),
+            profiles: cfg.profiles.keys().cloned().collect(),
+        })
+        .collect();
+    list.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(list)
+}
+
+#[tauri::command]
+async fn providers_get(
+    name: String,
+    app_handle: tauri::AppHandle,
+) -> Result<provider::model::ProviderConfig, String> {
+    let path = provider::io::providers_path(&app_handle)?;
+    let file = provider::io::load_providers(&path)?;
+    file.providers
+        .get(&name)
+        .cloned()
+        .ok_or(format!("provider_not_found: {}", name))
+}
+
+#[tauri::command]
+async fn providers_upsert(
+    name: String,
+    config: provider::model::ProviderConfig,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let path = provider::io::providers_path(&app_handle)?;
+    let mut file = provider::io::load_providers(&path)?;
+    file.providers.insert(name, config);
+    provider::io::save_providers_atomic(&path, &file)
+}
+
+#[tauri::command]
+async fn providers_delete(
+    name: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let path = provider::io::providers_path(&app_handle)?;
+    let mut file = provider::io::load_providers(&path)?;
+    file.providers.remove(&name);
+    provider::io::save_providers_atomic(&path, &file)
+}
+
+#[tauri::command]
+async fn secrets_set(
+    credential_ref: String,
+    secret: String,
+) -> Result<(), String> {
+    secrets::set_secret(&credential_ref, &secret)
+}
+
+#[tauri::command]
+async fn secrets_exists(
+    credential_ref: String,
+) -> Result<bool, String> {
+    secrets::exists(&credential_ref)
+}
+
+#[tauri::command]
+async fn secrets_delete(
+    credential_ref: String,
+) -> Result<(), String> {
+    secrets::delete_secret(&credential_ref)
+}
+
+#[tauri::command]
+async fn providers_test(
+    provider_name: String,
+    profile_name: String,
+    app_handle: tauri::AppHandle,
+) -> Result<provider::model::TestResult, String> {
+    Ok(provider::test::run_provider_test(&app_handle, &provider_name, &profile_name).await)
+}
+
+// ============================================================
 // Helpers
 // ============================================================
 
@@ -958,6 +1082,15 @@ pub fn run() {
             marker_add,
             marker_update,
             marker_remove,
+            update_generation_settings,
+            providers_list,
+            providers_get,
+            providers_upsert,
+            providers_delete,
+            secrets_set,
+            secrets_exists,
+            secrets_delete,
+            providers_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

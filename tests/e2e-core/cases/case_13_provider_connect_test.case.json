@@ -1,0 +1,48 @@
+{
+  "id": "case_13_provider_connect_test",
+  "name": "Provider Connect / Disconnect / Test",
+  "description": "验证 Connect 设置 secret → 状态变为 Connected → Test → Disconnect → 状态变为 Not connected",
+  "steps": [
+    { "action": "launch" },
+    { "action": "handleDirectoryPicker", "params": { "dir": "{{tempDir}}" } },
+    { "action": "handlePrompt", "params": { "value": "S3 Connect Test" } },
+    { "action": "clickNewProject" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+
+    { "action": "clickSettings" },
+    { "action": "waitForSelector", "params": { "testId": "settings-panel" } },
+
+    { "action": "clickAddProvider" },
+    { "action": "fillProviderName", "params": { "name": "connProvider" } },
+    { "action": "fillDisplayName", "params": { "name": "Conn Provider" } },
+    { "action": "fillBaseUrl", "params": { "url": "https://api.conn.com" } },
+    { "action": "selectAuthKind", "params": { "kind": "api_key" } },
+    { "action": "fillCredentialRef", "params": { "profileName": "default", "value": "cred_conn_default" } },
+    { "action": "clickSaveProvider" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+
+    { "action": "clickProviderItem", "params": { "name": "connProvider" } },
+    { "action": "waitMs", "params": { "ms": 300 } },
+
+    { "action": "assertConnectionStatus", "params": { "credentialRef": "cred_conn_default", "expected": "Not connected" } },
+
+    { "action": "fillSecret", "params": { "credentialRef": "cred_conn_default", "value": "sk-fake-key-12345" } },
+    { "action": "clickConnect", "params": { "credentialRef": "cred_conn_default" } },
+    { "action": "waitMs", "params": { "ms": 300 } },
+
+    { "action": "assertConnectionStatus", "params": { "credentialRef": "cred_conn_default", "expected": "Connected" } },
+
+    { "action": "clickTestProfile", "params": { "profileName": "default" } },
+    { "action": "waitMs", "params": { "ms": 500 } },
+
+    { "action": "assertTestResultContains", "params": { "contains": "连接成功" } },
+
+    { "action": "clickDisconnect", "params": { "credentialRef": "cred_conn_default" } },
+    { "action": "clickDisconnect", "params": { "credentialRef": "cred_conn_default" } },
+    { "action": "waitMs", "params": { "ms": 300 } },
+
+    { "action": "assertConnectionStatus", "params": { "credentialRef": "cred_conn_default", "expected": "Not connected" } },
+
+    { "action": "closeSettings" }
+  ]
+}

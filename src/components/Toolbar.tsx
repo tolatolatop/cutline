@@ -1,7 +1,11 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useProjectStore } from "../store/projectStore";
 
-export function Toolbar() {
+interface ToolbarProps {
+  onOpenSettings?: () => void;
+}
+
+export function Toolbar({ onOpenSettings }: ToolbarProps) {
   const {
     projectFile,
     isDirty,
@@ -90,11 +94,21 @@ export function Toolbar() {
       >
         导入素材
       </button>
-      {projectFile && (
-        <span className="ml-auto text-xs text-zinc-500">
-          {projectFile.project.name} — {projectFile.assets.length} 个素材
-        </span>
-      )}
+      <div className="ml-auto flex items-center gap-2">
+        {projectFile && (
+          <span className="text-xs text-zinc-500">
+            {projectFile.project.name} — {projectFile.assets.length} 个素材
+          </span>
+        )}
+        <button
+          data-testid="btn-settings"
+          onClick={onOpenSettings}
+          className="px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded"
+          title="设置"
+        >
+          ⚙ 设置
+        </button>
+      </div>
     </div>
   );
 }

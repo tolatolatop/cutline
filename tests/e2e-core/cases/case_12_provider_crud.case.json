@@ -1,0 +1,37 @@
+{
+  "id": "case_12_provider_crud",
+  "name": "Provider CRUD: 新增 → 编辑 → 删除",
+  "description": "验证 Provider 的增删改查完整流程",
+  "steps": [
+    { "action": "launch" },
+    { "action": "handleDirectoryPicker", "params": { "dir": "{{tempDir}}" } },
+    { "action": "handlePrompt", "params": { "value": "S3 Test Project" } },
+    { "action": "clickNewProject" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+
+    { "action": "clickSettings" },
+    { "action": "waitForSelector", "params": { "testId": "settings-panel" } },
+
+    { "action": "clickAddProvider" },
+    { "action": "fillProviderName", "params": { "name": "testApiProvider" } },
+    { "action": "fillDisplayName", "params": { "name": "Test API Provider" } },
+    { "action": "fillBaseUrl", "params": { "url": "https://api.test.com" } },
+    { "action": "selectAuthKind", "params": { "kind": "api_key" } },
+    { "action": "fillCredentialRef", "params": { "profileName": "default", "value": "cred_test_default" } },
+    { "action": "clickSaveProvider" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+
+    { "action": "assertProviderCount", "params": { "expected": 1 } },
+
+    { "action": "clickProviderItem", "params": { "name": "testApiProvider" } },
+    { "action": "waitMs", "params": { "ms": 300 } },
+
+    { "action": "clickDeleteProvider" },
+    { "action": "clickConfirmDeleteProvider" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+
+    { "action": "assertProviderCount", "params": { "expected": 0 } },
+
+    { "action": "closeSettings" }
+  ]
+}

@@ -304,6 +304,95 @@ export class PlaywrightActions implements DriverActions {
     await this.page.click(testIdSelector("btn-save-marker"));
   }
 
+  // ── Settings / Provider operations (S3) ──
+
+  async clickSettings(): Promise<void> {
+    await this.page.click(testIdSelector("btn-settings"));
+  }
+
+  async closeSettings(): Promise<void> {
+    await this.page.click(testIdSelector("btn-close-settings"));
+  }
+
+  async clickAddProvider(): Promise<void> {
+    await this.page.click(testIdSelector("btn-add-provider"));
+  }
+
+  async clickProviderItem(name: string): Promise<void> {
+    await this.page.click(testIdSelector(`provider-item-${name}`));
+  }
+
+  async fillProviderName(name: string): Promise<void> {
+    const input = this.page.locator(testIdSelector("input-provider-name"));
+    await input.fill(name);
+  }
+
+  async fillDisplayName(name: string): Promise<void> {
+    const input = this.page.locator(testIdSelector("input-display-name"));
+    await input.fill(name);
+  }
+
+  async fillBaseUrl(url: string): Promise<void> {
+    const input = this.page.locator(testIdSelector("input-base-url"));
+    await input.fill(url);
+  }
+
+  async selectAuthKind(kind: "api_key" | "session_cookie"): Promise<void> {
+    await this.page.click(testIdSelector(`auth-kind-${kind.replace("_", "-")}`));
+  }
+
+  async fillCredentialRef(profileName: string, value: string): Promise<void> {
+    const input = this.page.locator(testIdSelector(`input-cred-ref-${profileName}`));
+    await input.fill(value);
+  }
+
+  async clickSaveProvider(): Promise<void> {
+    await this.page.click(testIdSelector("btn-save-provider"));
+  }
+
+  async clickDeleteProvider(): Promise<void> {
+    await this.page.click(testIdSelector("btn-delete-provider"));
+  }
+
+  async clickConfirmDeleteProvider(): Promise<void> {
+    await this.page.click(testIdSelector("btn-delete-provider"));
+  }
+
+  async fillSecret(credentialRef: string, value: string): Promise<void> {
+    const input = this.page.locator(testIdSelector(`input-secret-${credentialRef}`));
+    await input.fill(value);
+  }
+
+  async clickConnect(credentialRef: string): Promise<void> {
+    await this.page.click(testIdSelector(`btn-connect-${credentialRef}`));
+  }
+
+  async clickDisconnect(credentialRef: string): Promise<void> {
+    await this.page.click(testIdSelector(`btn-disconnect-${credentialRef}`));
+  }
+
+  async clickTestProfile(profileName: string): Promise<void> {
+    await this.page.click(testIdSelector(`btn-test-${profileName}`));
+  }
+
+  async getProviderCount(): Promise<number> {
+    const list = this.page.locator(testIdSelector("provider-list"));
+    const items = list.locator('[data-testid^="provider-item-"]');
+    return items.count();
+  }
+
+  async getConnectionStatus(credentialRef: string): Promise<string> {
+    const dot = this.page.locator(testIdSelector(`conn-status-${credentialRef}`));
+    const cls = await dot.getAttribute("class");
+    if (cls && cls.includes("bg-green")) return "Connected";
+    return "Not connected";
+  }
+
+  async getTestResultText(): Promise<string> {
+    const el = this.page.locator(testIdSelector("test-result"));
+    return (await el.textContent()) ?? "";
+  }
+
   // ── Generic UI helpers ──
 
   async waitMs(ms: number): Promise<void> {

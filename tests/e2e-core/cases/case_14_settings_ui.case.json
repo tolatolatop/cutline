@@ -1,0 +1,34 @@
+{
+  "id": "case_14_settings_ui",
+  "name": "Settings UI: 打开/验证控件/关闭",
+  "description": "验证设置面板可正常打开，各关键控件可见，可正常关闭",
+  "steps": [
+    { "action": "launch" },
+    { "action": "handleDirectoryPicker", "params": { "dir": "{{tempDir}}" } },
+    { "action": "handlePrompt", "params": { "value": "S3 UI Test" } },
+    { "action": "clickNewProject" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+
+    { "action": "assertSelectorVisible", "params": { "testId": "btn-settings" } },
+    { "action": "clickSettings" },
+    { "action": "waitForSelector", "params": { "testId": "settings-panel" } },
+
+    { "action": "assertSelectorVisible", "params": { "testId": "btn-add-provider" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "provider-list" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "btn-close-settings" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "project-provider-select" } },
+
+    { "action": "clickAddProvider" },
+    { "action": "waitMs", "params": { "ms": 200 } },
+    { "action": "assertSelectorVisible", "params": { "testId": "input-provider-name" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "input-display-name" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "input-base-url" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "auth-kind-api-key" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "auth-kind-session-cookie" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "btn-save-provider" } },
+
+    { "action": "closeSettings" },
+    { "action": "waitMs", "params": { "ms": 300 } },
+    { "action": "assertSelectorHidden", "params": { "testId": "settings-panel" } }
+  ]
+}

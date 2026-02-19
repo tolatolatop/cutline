@@ -161,6 +161,9 @@ export function buildMockScript(): string {
     return asset;
   }
 
+  var providersStore = {};
+  var secretsStore = {};
+
   var handlers = {
     create_project: function (args) {
       project = makeProject(args.name || "Untitled");
@@ -251,6 +254,64 @@ export function buildMockScript(): string {
     },
     marker_remove: function (args) {
       project.timeline.markers = project.timeline.markers.filter(function(mk) { return mk.markerId !== args.markerId; });
+      setTimeout(function() { emitMockEvent("project:updated", {}); }, 50);
+      return null;
+    },
+    providers_list: function () {
+      var list = [];
+      var keys = Object.keys(providersStore);
+      for (var i = 0; i < keys.length; i++) {
+        var name = keys[i];
+        var cfg = providersStore[name];
+        list.push({
+          name: name,
+          displayName: cfg.displayName || name,
+          authKind: cfg.auth ? cfg.auth.kind : "api_key",
+          profiles: Object.keys(cfg.profiles || {}),
+        });
+      }
+      return list;
+    },
+    providers_get: function (args) {
+      var cfg = providersStore[args.name];
+      if (!cfg) throw new Error("provider_not_found: " + args.name);
+      return cfg;
+    },
+    providers_upsert: function (args) {
+      providersStore[args.name] = args.config;
+      return null;
+    },
+    providers_delete: function (args) {
+      delete providersStore[args.name];
+      return null;
+    },
+    secrets_set: function (args) {
+      secretsStore[args.credentialRef] = true;
+      return null;
+    },
+    secrets_exists: function (args) {
+      return !!secretsStore[args.credentialRef];
+    },
+    secrets_delete: function (args) {
+      delete secretsStore[args.credentialRef];
+      return null;
+    },
+    providers_test: function (args) {
+      var cfg = providersStore[args.providerName];
+      if (!cfg) return { ok: false, error: "provider_not_found" };
+      var prof = cfg.profiles && cfg.profiles[args.profileName];
+      if (!prof) return { ok: false, error: "profile_not_found" };
+      if (!secretsStore[prof.credentialRef]) return { ok: false, error: "missing_credentials" };
+      return { ok: true, latencyMs: 42 };
+    },
+    update_generation_settings: function (args) {
+      if (project) {
+        if (!project.project.settings.generation) {
+          project.project.settings.generation = {};
+        }
+        project.project.settings.generation.videoProvider = args.videoProvider || null;
+        project.project.settings.generation.videoProfile = args.videoProfile || null;
+      }
       setTimeout(function() { emitMockEvent("project:updated", {}); }, 50);
       return null;
     },

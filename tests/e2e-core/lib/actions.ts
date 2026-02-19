@@ -62,6 +62,27 @@ export interface DriverActions {
   fillMarkerPrompt(text: string): Promise<void>;
   clickSaveMarker(): Promise<void>;
 
+  // ── Settings / Provider operations (S3) ──
+  clickSettings(): Promise<void>;
+  closeSettings(): Promise<void>;
+  clickAddProvider(): Promise<void>;
+  clickProviderItem(name: string): Promise<void>;
+  fillProviderName(name: string): Promise<void>;
+  fillDisplayName(name: string): Promise<void>;
+  fillBaseUrl(url: string): Promise<void>;
+  selectAuthKind(kind: "api_key" | "session_cookie"): Promise<void>;
+  fillCredentialRef(profileName: string, value: string): Promise<void>;
+  clickSaveProvider(): Promise<void>;
+  clickDeleteProvider(): Promise<void>;
+  clickConfirmDeleteProvider(): Promise<void>;
+  fillSecret(credentialRef: string, value: string): Promise<void>;
+  clickConnect(credentialRef: string): Promise<void>;
+  clickDisconnect(credentialRef: string): Promise<void>;
+  clickTestProfile(profileName: string): Promise<void>;
+  getProviderCount(): Promise<number>;
+  getConnectionStatus(credentialRef: string): Promise<string>;
+  getTestResultText(): Promise<string>;
+
   // ── Generic UI helpers ──
   waitMs(ms: number): Promise<void>;
   waitForSelector(testId: string, timeout?: number): Promise<void>;

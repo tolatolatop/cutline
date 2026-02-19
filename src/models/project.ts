@@ -36,6 +36,12 @@ export interface ProjectSettings {
   resolution: { width: number; height: number };
   aspectRatio: string;
   sampleRate: number;
+  generation?: GenerationSettings;
+}
+
+export interface GenerationSettings {
+  videoProvider?: string;
+  videoProfile?: string;
 }
 
 export interface ProjectPaths {

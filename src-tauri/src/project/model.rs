@@ -38,6 +38,17 @@ pub struct ProjectSettings {
     pub resolution: Resolution,
     pub aspect_ratio: String,
     pub sample_rate: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generation: Option<GenerationSettings>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video_provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video_profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

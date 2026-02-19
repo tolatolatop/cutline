@@ -7,6 +7,7 @@ import { PreviewPlayer } from "./components/PreviewPlayer";
 import { TimelineView } from "./components/TimelineView";
 import { MarkerPanel } from "./components/MarkerPanel";
 import { ClipInfoPanel } from "./components/ClipInfoPanel";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { useProjectStore, initEventSubscriptions } from "./store/projectStore";
 
 type RightTab = "tasks" | "markers" | "clip" | "detail";
@@ -90,6 +91,7 @@ function ResizeHandle({
 export default function App() {
   const [rightTab, setRightTab] = useState<RightTab>("tasks");
   const [timelineHeight, setTimelineHeight] = useState(240);
+  const [showSettings, setShowSettings] = useState(false);
   const baseHeightRef = useRef(240);
   const selectedAssetId = useProjectStore((s) => s.selectedAssetId);
 
@@ -113,7 +115,8 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
-      <Toolbar />
+      <Toolbar onOpenSettings={() => setShowSettings(true)} />
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
       <ErrorBanner />
       <ProjectInfo />
 

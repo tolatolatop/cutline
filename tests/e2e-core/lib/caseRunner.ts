@@ -125,6 +125,37 @@ const builtinAsserts: Record<string, AssertHandler> = {
       );
     }
   },
+
+  async assertProviderCount(actions, params) {
+    const expected = params.expected as number;
+    const actual = await actions.getProviderCount();
+    if (actual !== expected) {
+      throw new Error(
+        `assertProviderCount: expected ${expected}, got ${actual}`
+      );
+    }
+  },
+
+  async assertConnectionStatus(actions, params) {
+    const credentialRef = params.credentialRef as string;
+    const expected = params.expected as string;
+    const actual = await actions.getConnectionStatus(credentialRef);
+    if (actual !== expected) {
+      throw new Error(
+        `assertConnectionStatus(${credentialRef}): expected "${expected}", got "${actual}"`
+      );
+    }
+  },
+
+  async assertTestResultContains(actions, params) {
+    const substring = params.contains as string;
+    const text = await actions.getTestResultText();
+    if (!text.includes(substring)) {
+      throw new Error(
+        `assertTestResultContains: test result does not contain "${substring}". Actual: "${text}"`
+      );
+    }
+  },
 };
 
 // ── Case loader ──
@@ -216,6 +247,16 @@ function paramsToArgs(
     deleteMarkerByIndex: ["index"],
     fillMarkerLabel: ["text"],
     fillMarkerPrompt: ["text"],
+    clickProviderItem: ["name"],
+    fillProviderName: ["name"],
+    fillDisplayName: ["name"],
+    fillBaseUrl: ["url"],
+    selectAuthKind: ["kind"],
+    fillCredentialRef: ["profileName", "value"],
+    fillSecret: ["credentialRef", "value"],
+    clickConnect: ["credentialRef"],
+    clickDisconnect: ["credentialRef"],
+    clickTestProfile: ["profileName"],
     waitMs: ["ms"],
     waitForSelector: ["testId", "timeout"],
     waitForSelectorHidden: ["testId", "timeout"],

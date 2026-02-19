@@ -123,3 +123,14 @@ export async function markerUpdate(
 export async function markerRemove(markerId: string): Promise<void> {
   return invoke("marker_remove", { markerId });
 }
+
+// ============================================================
+// Project Settings Commands
+// ============================================================
+
+export async function updateGenerationSettings(
+  videoProvider?: string,
+  videoProfile?: string
+): Promise<void> {
+  return invoke("update_generation_settings", { videoProvider, videoProfile });
+}
