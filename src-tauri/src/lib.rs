@@ -903,26 +903,20 @@ pub fn run() {
         .register_uri_scheme_protocol("media", move |_ctx, request| {
             let state = state_for_protocol.clone();
             let uri = request.uri().to_string();
+            let range_header = request
+                .headers()
+                .get("range")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string());
 
             let (asset_id, prefer_proxy) = parse_media_uri(&uri);
 
-            let rt = tokio::runtime::Handle::current();
-            let join_result = std::thread::spawn(move || {
-                rt.block_on(async {
-                    serve_media_asset(&state, &asset_id, prefer_proxy).await
-                })
-            })
-            .join();
-
-            match join_result {
-                Ok(Ok(resp)) => resp,
-                Ok(Err(e)) => tauri::http::Response::builder()
+            match serve_media_asset_sync(&state, &asset_id, prefer_proxy, range_header.as_deref()) {
+                Ok(resp) => resp,
+                Err(e) => tauri::http::Response::builder()
                     .status(500)
+                    .header("Access-Control-Allow-Origin", "*")
                     .body(e.into_bytes())
-                    .unwrap(),
-                Err(_) => tauri::http::Response::builder()
-                    .status(500)
-                    .body(b"media protocol thread panic".to_vec())
                     .unwrap(),
             }
         })
@@ -973,6 +967,8 @@ fn parse_media_uri(uri: &str) -> (String, bool) {
     let path = uri
         .strip_prefix("media://localhost/")
         .or_else(|| uri.strip_prefix("media://"))
+        .or_else(|| uri.strip_prefix("http://media.localhost/"))
+        .or_else(|| uri.strip_prefix("https://media.localhost/"))
         .unwrap_or(uri);
 
     let (path_part, query) = match path.split_once('?') {
@@ -980,18 +976,40 @@ fn parse_media_uri(uri: &str) -> (String, bool) {
         None => (path, ""),
     };
 
-    let asset_id = path_part.to_string();
+    let asset_id = percent_decode(path_part);
     let prefer_proxy = query.contains("proxy=1");
 
     (asset_id, prefer_proxy)
 }
 
-async fn serve_media_asset(
+fn percent_decode(s: &str) -> String {
+    let mut result = Vec::new();
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(byte) = u8::from_str_radix(
+                &s[i + 1..i + 3],
+                16,
+            ) {
+                result.push(byte);
+                i += 3;
+                continue;
+            }
+        }
+        result.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(result).unwrap_or_else(|_| s.to_string())
+}
+
+fn serve_media_asset_sync(
     state: &Arc<AppState>,
     asset_id: &str,
     prefer_proxy: bool,
+    range_header: Option<&str>,
 ) -> Result<tauri::http::Response<Vec<u8>>, String> {
-    let guard = state.inner.lock().await;
+    let guard = state.inner.blocking_lock();
     let loaded = guard.as_ref().ok_or("No project loaded")?;
 
     let asset = loaded
@@ -1014,8 +1032,10 @@ async fn serve_media_asset(
 
     drop(guard);
 
-    let bytes = std::fs::read(&file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let file_bytes = std::fs::read(&file_path)
+        .map_err(|e| format!("Failed to read {}: {}", file_path.display(), e))?;
+
+    let total_len = file_bytes.len();
 
     let ext = file_path
         .extension()
@@ -1040,12 +1060,42 @@ async fn serve_media_asset(
         _ => "application/octet-stream",
     };
 
-    let len = bytes.len();
-    tauri::http::Response::builder()
-        .status(200)
-        .header("Content-Type", content_type)
-        .header("Content-Length", len)
-        .header("Access-Control-Allow-Origin", "*")
-        .body(bytes)
-        .map_err(|e| format!("Failed to build response: {}", e))
+    if let Some(range) = range_header {
+        let (start, end) = parse_range_header(range, total_len);
+        let chunk = file_bytes[start..=end].to_vec();
+
+        tauri::http::Response::builder()
+            .status(206)
+            .header("Content-Type", content_type)
+            .header("Content-Length", chunk.len())
+            .header("Content-Range", format!("bytes {}-{}/{}", start, end, total_len))
+            .header("Accept-Ranges", "bytes")
+            .header("Access-Control-Allow-Origin", "*")
+            .body(chunk)
+            .map_err(|e| format!("Failed to build response: {}", e))
+    } else {
+        tauri::http::Response::builder()
+            .status(200)
+            .header("Content-Type", content_type)
+            .header("Content-Length", total_len)
+            .header("Accept-Ranges", "bytes")
+            .header("Access-Control-Allow-Origin", "*")
+            .body(file_bytes)
+            .map_err(|e| format!("Failed to build response: {}", e))
+    }
+}
+
+fn parse_range_header(range: &str, total: usize) -> (usize, usize) {
+    let range = range.trim_start_matches("bytes=");
+    let parts: Vec<&str> = range.split('-').collect();
+    let start = parts
+        .first()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(0);
+    let end = parts
+        .get(1)
+        .and_then(|s| if s.is_empty() { None } else { s.parse::<usize>().ok() })
+        .unwrap_or(total - 1)
+        .min(total - 1);
+    (start, end)
 }

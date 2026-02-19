@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useProjectStore } from "../store/projectStore";
 import {
   useTimelineViewStore,
@@ -44,7 +45,8 @@ export function PreviewPlayer() {
 
   const getAssetMediaUrl = useCallback(
     (assetId: string, preferProxy: boolean) => {
-      return `media://localhost/${assetId}${preferProxy ? "?proxy=1" : ""}`;
+      const base = convertFileSrc(assetId, "media");
+      return preferProxy ? `${base}?proxy=1` : base;
     },
     []
   );
@@ -204,7 +206,7 @@ export function PreviewPlayer() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-black">
+    <div data-testid="preview-player" className="flex flex-col h-full bg-black">
       {/* Video area */}
       <div className="flex-1 flex items-center justify-center relative overflow-hidden">
         {isBlack || !currentSrc ? (
@@ -225,6 +227,7 @@ export function PreviewPlayer() {
       {/* Transport controls */}
       <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/80 border-t border-zinc-800">
         <button
+          data-testid="btn-play-pause"
           onClick={togglePlay}
           className="px-2 py-0.5 text-xs bg-zinc-700 hover:bg-zinc-600 rounded text-white"
         >
@@ -232,6 +235,7 @@ export function PreviewPlayer() {
         </button>
 
         <input
+          data-testid="preview-seek-bar"
           type="range"
           min={0}
           max={Math.max(durationMs, 1)}
@@ -240,11 +244,12 @@ export function PreviewPlayer() {
           className="flex-1 h-1 accent-blue-500"
         />
 
-        <span className="text-[10px] text-zinc-400 font-mono min-w-[80px] text-right">
+        <span data-testid="preview-time-display" className="text-[10px] text-zinc-400 font-mono min-w-[80px] text-right">
           {formatMs(playheadMs)} / {formatMs(durationMs)}
         </span>
 
         <button
+          data-testid="btn-capture-frame"
           onClick={handleCaptureFrame}
           className="px-2 py-0.5 text-[10px] bg-zinc-700 hover:bg-zinc-600 rounded text-white"
           title="抓取当前帧"

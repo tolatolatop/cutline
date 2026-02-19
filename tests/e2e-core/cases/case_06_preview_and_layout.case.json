@@ -1,0 +1,36 @@
+{
+  "id": "case_06_preview_and_layout",
+  "name": "预览播放器与 NLE 布局验证",
+  "description": "验证 NLE 布局各区域可见：素材库、预览播放器、标签栏、时间轴，以及预览控件存在",
+  "steps": [
+    { "action": "launch" },
+    { "action": "handleDirectoryPicker", "params": { "dir": "$TEMP_DIR" } },
+    { "action": "handlePrompt", "params": { "value": "LayoutTest" } },
+    { "action": "clickNewProject" },
+    { "action": "waitForSelector", "params": { "testId": "project-info", "timeout": 10000 } },
+
+    { "action": "assertSelectorVisible", "params": { "testId": "asset-library" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "preview-player" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "timeline-view" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "btn-play-pause" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "preview-seek-bar" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "preview-time-display" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "btn-capture-frame" } },
+    { "action": "assertPreviewTimeContains", "params": { "contains": "00:00.000" } },
+
+    { "action": "switchTab", "params": { "tab": "tasks" } },
+    { "action": "waitForSelector", "params": { "testId": "task-panel" } },
+
+    { "action": "switchTab", "params": { "tab": "markers" } },
+    { "action": "waitForSelector", "params": { "testId": "marker-panel" } },
+
+    { "action": "switchTab", "params": { "tab": "detail" } },
+    { "action": "waitForSelector", "params": { "testId": "metadata-view" } },
+
+    { "action": "assertSelectorVisible", "params": { "testId": "btn-add-to-timeline" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "timeline-playhead-time" } },
+
+    { "action": "screenshot", "params": { "name": "nle-layout" } },
+    { "action": "close" }
+  ]
+}

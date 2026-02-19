@@ -143,6 +143,7 @@ export default function App() {
             ).map(({ key, label }) => (
               <button
                 key={key}
+                data-testid={`tab-${key}`}
                 onClick={() => setRightTab(key)}
                 className={`flex-1 px-2 py-1.5 text-[10px] font-medium transition-colors ${
                   rightTab === key

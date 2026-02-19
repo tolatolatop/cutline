@@ -169,10 +169,91 @@ export class PlaywrightActions implements DriverActions {
     await this.page.click(testIdSelector(`task-cancel-${taskId}`));
   }
 
+  // ── Timeline operations (S2) ──
+
+  async clickAddToTimeline(): Promise<void> {
+    await this.page.click(testIdSelector("btn-add-to-timeline"));
+  }
+
+  async clickDeleteClip(): Promise<void> {
+    await this.page.click(testIdSelector("btn-delete-clip"));
+  }
+
+  async clickClip(clipId: string): Promise<void> {
+    await this.page.click(testIdSelector(`clip-block-${clipId}`));
+  }
+
+  async getClipCount(): Promise<number> {
+    const clips = this.page.locator('[data-testid^="clip-block-"]');
+    return clips.count();
+  }
+
+  // ── Preview operations (S2) ──
+
+  async clickPlayPause(): Promise<void> {
+    await this.page.click(testIdSelector("btn-play-pause"));
+  }
+
+  async clickCaptureFrame(): Promise<void> {
+    await this.page.click(testIdSelector("btn-capture-frame"));
+  }
+
+  async getPreviewTimeDisplay(): Promise<string> {
+    const el = this.page.locator(testIdSelector("preview-time-display"));
+    return (await el.textContent()) ?? "";
+  }
+
+  // ── Marker operations (S2) ──
+
+  async switchTab(tab: string): Promise<void> {
+    await this.page.click(testIdSelector(`tab-${tab}`));
+  }
+
+  async clickAddMarker(): Promise<void> {
+    await this.page.click(testIdSelector("btn-add-marker"));
+  }
+
+  async getMarkerCount(): Promise<number> {
+    const panel = this.page.locator(testIdSelector("marker-list"));
+    const rows = panel.locator('[data-testid^="marker-row-"]');
+    return rows.count();
+  }
+
+  async clickMarkerRow(index: number): Promise<void> {
+    const panel = this.page.locator(testIdSelector("marker-list"));
+    const rows = panel.locator('[data-testid^="marker-row-"]');
+    await rows.nth(index).click();
+  }
+
+  async fillMarkerLabel(text: string): Promise<void> {
+    const input = this.page.locator(testIdSelector("marker-edit-label"));
+    await input.fill(text);
+  }
+
+  async fillMarkerPrompt(text: string): Promise<void> {
+    const textarea = this.page.locator(testIdSelector("marker-edit-prompt"));
+    await textarea.fill(text);
+  }
+
+  async clickSaveMarker(): Promise<void> {
+    await this.page.click(testIdSelector("btn-save-marker"));
+  }
+
   // ── Generic UI helpers ──
+
+  async waitMs(ms: number): Promise<void> {
+    await this.page.waitForTimeout(ms);
+  }
 
   async waitForSelector(testId: string, timeout = 5000): Promise<void> {
     await this.page.waitForSelector(testIdSelector(testId), { timeout });
+  }
+
+  async waitForSelectorHidden(testId: string, timeout = 5000): Promise<void> {
+    await this.page.waitForSelector(testIdSelector(testId), {
+      state: "hidden",
+      timeout,
+    });
   }
 
   async getTextByTestId(testId: string): Promise<string> {

@@ -1,0 +1,36 @@
+{
+  "id": "case_05_markers_management",
+  "name": "标记与 Prompt 管理",
+  "description": "创建项目，添加标记，编辑标记标签和 Prompt，验证标记面板展示",
+  "steps": [
+    { "action": "launch" },
+    { "action": "handleDirectoryPicker", "params": { "dir": "$TEMP_DIR" } },
+    { "action": "handlePrompt", "params": { "value": "MarkerTest" } },
+    { "action": "clickNewProject" },
+    { "action": "waitForSelector", "params": { "testId": "project-info", "timeout": 10000 } },
+
+    { "action": "switchTab", "params": { "tab": "markers" } },
+    { "action": "waitForSelector", "params": { "testId": "marker-panel" } },
+    { "action": "assertMarkerCount", "params": { "expected": 0 } },
+
+    { "action": "clickAddMarker" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+    { "action": "assertMarkerCount", "params": { "expected": 1 } },
+
+    { "action": "clickMarkerRow", "params": { "index": 0 } },
+    { "action": "waitForSelector", "params": { "testId": "marker-edit-label" } },
+    { "action": "fillMarkerLabel", "params": { "text": "第一个标记" } },
+    { "action": "fillMarkerPrompt", "params": { "text": "这是测试的 Prompt 文本" } },
+    { "action": "clickSaveMarker" },
+    { "action": "waitMs", "params": { "ms": 300 } },
+
+    { "action": "clickAddMarker" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+    { "action": "assertMarkerCount", "params": { "expected": 2 } },
+
+    { "action": "assertTextContains", "params": { "testId": "marker-count", "contains": "2" } },
+
+    { "action": "screenshot", "params": { "name": "markers-added" } },
+    { "action": "close" }
+  ]
+}

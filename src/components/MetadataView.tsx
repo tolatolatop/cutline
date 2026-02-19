@@ -114,7 +114,7 @@ export function MetadataView() {
 
   if (!projectFile || !selectedAssetId) {
     return (
-      <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm">
+      <div data-testid="metadata-view" className="flex-1 flex items-center justify-center text-zinc-500 text-sm">
         选择一个素材查看详情
       </div>
     );
@@ -123,7 +123,7 @@ export function MetadataView() {
   const asset = projectFile.assets.find((a) => a.assetId === selectedAssetId);
   if (!asset) {
     return (
-      <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm">
+      <div data-testid="metadata-view" className="flex-1 flex items-center justify-center text-zinc-500 text-sm">
         素材不存在
       </div>
     );

@@ -1,0 +1,36 @@
+{
+  "id": "case_04_timeline_add_remove",
+  "name": "时间轴 Clip 添加与删除",
+  "description": "创建项目，导入素材，添加 clip 到时间轴，验证 clip 出现，然后删除 clip 验证移除",
+  "steps": [
+    { "action": "launch" },
+    { "action": "handleDirectoryPicker", "params": { "dir": "$TEMP_DIR" } },
+    { "action": "handlePrompt", "params": { "value": "TimelineTest" } },
+    { "action": "clickNewProject" },
+    { "action": "waitForSelector", "params": { "testId": "project-info", "timeout": 10000 } },
+
+    { "action": "handleFilePicker", "params": { "fixtures": ["videos/sample.mp4"] } },
+    { "action": "clickImport" },
+    {
+      "action": "waitForTaskState",
+      "params": { "kind": "thumb", "state": "succeeded", "timeout": 30000 }
+    },
+    { "action": "assertAssetCount", "params": { "expected": 1 } },
+
+    { "action": "assertSelectorVisible", "params": { "testId": "timeline-view" } },
+    { "action": "assertClipCount", "params": { "expected": 0 } },
+
+    { "action": "selectAsset", "params": { "index": 0 } },
+    { "action": "clickAddToTimeline" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+    { "action": "assertClipCount", "params": { "expected": 1 } },
+
+    { "action": "selectAsset", "params": { "index": 0 } },
+    { "action": "clickAddToTimeline" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+    { "action": "assertClipCount", "params": { "expected": 2 } },
+
+    { "action": "screenshot", "params": { "name": "timeline-2-clips" } },
+    { "action": "close" }
+  ]
+}

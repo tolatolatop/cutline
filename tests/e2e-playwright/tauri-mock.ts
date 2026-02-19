@@ -13,6 +13,7 @@ export function buildMockScript(): string {
   var assets = [];
   var tasks = [];
   var project = null;
+  var eventListeners = {};
 
   function makeId() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
@@ -85,6 +86,29 @@ export function buildMockScript(): string {
       return { kind: "audio", codec: "mp3", durationSec: 1.0, sampleRate: 44100, channels: 1 };
     }
     return { kind: "image", format: "png", width: 4, height: 4 };
+  }
+
+  function emitMockEvent(eventName, payload) {
+    var listeners = eventListeners[eventName] || [];
+    for (var i = 0; i < listeners.length; i++) {
+      var handlerId = listeners[i];
+      var fn = window["_" + handlerId];
+      if (typeof fn === "function") {
+        try { fn({ event: eventName, payload: payload || null }); } catch(e) {}
+      }
+    }
+  }
+
+  function recalcDuration() {
+    if (!project) return;
+    var maxMs = 0;
+    var clipKeys = Object.keys(project.timeline.clips);
+    for (var i = 0; i < clipKeys.length; i++) {
+      var c = project.timeline.clips[clipKeys[i]];
+      var end = c.startMs + c.durationMs;
+      if (end > maxMs) maxMs = end;
+    }
+    project.timeline.durationMs = maxMs;
   }
 
   function importAsset(filePath) {
@@ -164,23 +188,72 @@ export function buildMockScript(): string {
     },
     timeline_add_clip: function (args) {
       var clipId = makeId();
-      var clip = { clipId: clipId, assetId: args.assetId, trackId: args.trackId, startMs: args.startMs || 0, durationMs: 1000, inMs: 0, outMs: 1000 };
+      var assetObj = assets.find(function(a) { return a.assetId === args.assetId; });
+      var dur = (assetObj && assetObj.meta && assetObj.meta.durationSec) ? Math.round(assetObj.meta.durationSec * 1000) : 1000;
+      var clip = { clipId: clipId, assetId: args.assetId, trackId: args.trackId, startMs: args.startMs || 0, durationMs: dur, inMs: 0, outMs: dur };
       project.timeline.clips[clipId] = clip;
+      project.indexes.clipById[clipId] = clip;
       var track = project.timeline.tracks.find(function(t) { return t.trackId === args.trackId; });
       if (track) track.clipIds.push(clipId);
+      recalcDuration();
+      setTimeout(function() { emitMockEvent("project:updated", {}); }, 50);
       return clip;
     },
-    timeline_move_clip: function () { return null; },
-    timeline_trim_clip: function () { return null; },
-    timeline_remove_clip: function () { return null; },
+    timeline_move_clip: function (args) {
+      var clip = project.timeline.clips[args.clipId];
+      if (clip && typeof args.newStartMs === "number") {
+        clip.startMs = args.newStartMs;
+        recalcDuration();
+      }
+      setTimeout(function() { emitMockEvent("project:updated", {}); }, 50);
+      return null;
+    },
+    timeline_trim_clip: function (args) {
+      var clip = project.timeline.clips[args.clipId];
+      if (clip) {
+        if (typeof args.newInMs === "number") clip.inMs = args.newInMs;
+        if (typeof args.newOutMs === "number") clip.outMs = args.newOutMs;
+        clip.durationMs = clip.outMs - clip.inMs;
+        recalcDuration();
+      }
+      setTimeout(function() { emitMockEvent("project:updated", {}); }, 50);
+      return null;
+    },
+    timeline_remove_clip: function (args) {
+      var clip = project.timeline.clips[args.clipId];
+      if (clip) {
+        delete project.timeline.clips[args.clipId];
+        delete project.indexes.clipById[args.clipId];
+        project.timeline.tracks.forEach(function(track) {
+          var idx = track.clipIds.indexOf(args.clipId);
+          if (idx >= 0) track.clipIds.splice(idx, 1);
+        });
+        recalcDuration();
+      }
+      setTimeout(function() { emitMockEvent("project:updated", {}); }, 50);
+      return null;
+    },
     timeline_reorder_clips: function () { return null; },
     marker_add: function (args) {
       var marker = { markerId: makeId(), tMs: args.tMs || 0, label: args.label || "", promptText: args.promptText || "", createdAt: now() };
       project.timeline.markers.push(marker);
+      setTimeout(function() { emitMockEvent("project:updated", {}); }, 50);
       return marker;
     },
-    marker_update: function () { return null; },
-    marker_remove: function () { return null; },
+    marker_update: function (args) {
+      var m = project.timeline.markers.find(function(mk) { return mk.markerId === args.markerId; });
+      if (m) {
+        if (args.label !== undefined) m.label = args.label;
+        if (args.promptText !== undefined) m.promptText = args.promptText;
+      }
+      setTimeout(function() { emitMockEvent("project:updated", {}); }, 50);
+      return null;
+    },
+    marker_remove: function (args) {
+      project.timeline.markers = project.timeline.markers.filter(function(mk) { return mk.markerId !== args.markerId; });
+      setTimeout(function() { emitMockEvent("project:updated", {}); }, 50);
+      return null;
+    },
   };
 
   // Dialog plugin handlers
@@ -211,7 +284,16 @@ export function buildMockScript(): string {
   window.__TAURI_INTERNALS__ = {
     invoke: function (cmd, args, options) {
       // Event plugin
-      if (cmd === "plugin:event|listen" || cmd === "plugin:event|unlisten") {
+      if (cmd === "plugin:event|listen") {
+        var evtName = (args && args.event) || "";
+        var handlerId = args && args.handler;
+        if (evtName && handlerId !== undefined) {
+          if (!eventListeners[evtName]) eventListeners[evtName] = [];
+          eventListeners[evtName].push(handlerId);
+        }
+        return Promise.resolve(Math.floor(Math.random() * 1000000));
+      }
+      if (cmd === "plugin:event|unlisten") {
         return Promise.resolve(Math.floor(Math.random() * 1000000));
       }
       // Dialog plugin

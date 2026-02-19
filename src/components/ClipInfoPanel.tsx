@@ -58,7 +58,7 @@ export function ClipInfoPanel() {
   }
 
   return (
-    <div className="px-3 py-2 space-y-2 text-xs">
+    <div data-testid="clip-info-panel" className="px-3 py-2 space-y-2 text-xs">
       <div className="text-zinc-400 font-semibold text-[10px]">Clip 属性</div>
 
       {asset && (
@@ -75,6 +75,7 @@ export function ClipInfoPanel() {
         <label className="block text-[10px] text-zinc-500">
           起始 (ms)
           <input
+            data-testid="clip-edit-start"
             type="number"
             value={editStartMs}
             onChange={(e) => setEditStartMs(e.target.value)}
@@ -85,6 +86,7 @@ export function ClipInfoPanel() {
         <label className="block text-[10px] text-zinc-500">
           入点 (ms)
           <input
+            data-testid="clip-edit-in"
             type="number"
             value={editInMs}
             onChange={(e) => setEditInMs(e.target.value)}
@@ -95,6 +97,7 @@ export function ClipInfoPanel() {
         <label className="block text-[10px] text-zinc-500">
           出点 (ms)
           <input
+            data-testid="clip-edit-out"
             type="number"
             value={editOutMs}
             onChange={(e) => setEditOutMs(e.target.value)}
@@ -104,6 +107,7 @@ export function ClipInfoPanel() {
       </div>
 
       <button
+        data-testid="btn-apply-clip"
         onClick={handleApply}
         className="w-full px-2 py-1 text-[10px] bg-blue-600 hover:bg-blue-500 rounded text-white"
       >

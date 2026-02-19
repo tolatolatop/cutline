@@ -34,8 +34,30 @@ export interface DriverActions {
   retryTask(taskId: string): Promise<void>;
   cancelTask(taskId: string): Promise<void>;
 
+  // ── Timeline operations (S2) ──
+  clickAddToTimeline(): Promise<void>;
+  clickDeleteClip(): Promise<void>;
+  clickClip(clipId: string): Promise<void>;
+  getClipCount(): Promise<number>;
+
+  // ── Preview operations (S2) ──
+  clickPlayPause(): Promise<void>;
+  clickCaptureFrame(): Promise<void>;
+  getPreviewTimeDisplay(): Promise<string>;
+
+  // ── Marker operations (S2) ──
+  switchTab(tab: string): Promise<void>;
+  clickAddMarker(): Promise<void>;
+  getMarkerCount(): Promise<number>;
+  clickMarkerRow(index: number): Promise<void>;
+  fillMarkerLabel(text: string): Promise<void>;
+  fillMarkerPrompt(text: string): Promise<void>;
+  clickSaveMarker(): Promise<void>;
+
   // ── Generic UI helpers ──
+  waitMs(ms: number): Promise<void>;
   waitForSelector(testId: string, timeout?: number): Promise<void>;
+  waitForSelectorHidden(testId: string, timeout?: number): Promise<void>;
   getTextByTestId(testId: string): Promise<string>;
   screenshot(name: string): Promise<Buffer>;
 }

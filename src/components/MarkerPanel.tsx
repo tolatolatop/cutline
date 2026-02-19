@@ -19,6 +19,7 @@ function MarkerRow({
 }) {
   return (
     <div
+      data-testid={`marker-row-${marker.markerId}`}
       className={`px-3 py-2 border-b border-zinc-800 cursor-pointer text-sm ${
         selected
           ? "bg-yellow-900/20 border-l-2 border-l-yellow-500"
@@ -126,11 +127,12 @@ export function MarkerPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div data-testid="marker-panel" className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="px-3 py-2 text-xs text-zinc-400 font-semibold border-b border-zinc-800 flex items-center justify-between">
-        <span>标记 ({markers.length})</span>
+        <span data-testid="marker-count">标记 ({markers.length})</span>
         <button
+          data-testid="btn-add-marker"
           onClick={handleAddMarker}
           className="px-2 py-0.5 text-[10px] bg-yellow-600 hover:bg-yellow-500 rounded text-white"
         >
@@ -139,7 +141,7 @@ export function MarkerPanel() {
       </div>
 
       {/* Marker list */}
-      <div className="flex-1 overflow-y-auto">
+      <div data-testid="marker-list" className="flex-1 overflow-y-auto">
         {markers.length === 0 ? (
           <div className="flex items-center justify-center h-20 text-zinc-500 text-xs">
             暂无标记
@@ -165,6 +167,7 @@ export function MarkerPanel() {
             编辑标记 · {formatMs(selectedMarker.tMs)}
           </div>
           <input
+            data-testid="marker-edit-label"
             type="text"
             value={editLabel}
             onChange={(e) => setEditLabel(e.target.value)}
@@ -172,6 +175,7 @@ export function MarkerPanel() {
             className="w-full px-2 py-1 text-xs bg-zinc-800 border border-zinc-700 rounded text-zinc-200 focus:outline-none focus:border-zinc-500"
           />
           <textarea
+            data-testid="marker-edit-prompt"
             value={editPrompt}
             onChange={(e) => setEditPrompt(e.target.value)}
             placeholder="Prompt 文本..."
@@ -179,6 +183,7 @@ export function MarkerPanel() {
             className="w-full px-2 py-1 text-xs bg-zinc-800 border border-zinc-700 rounded text-zinc-200 focus:outline-none focus:border-zinc-500 resize-none"
           />
           <button
+            data-testid="btn-save-marker"
             onClick={handleSave}
             className="w-full px-2 py-1 text-[10px] bg-blue-600 hover:bg-blue-500 rounded text-white"
           >

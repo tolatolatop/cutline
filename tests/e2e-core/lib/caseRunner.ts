@@ -50,9 +50,37 @@ const builtinAsserts: Record<string, AssertHandler> = {
     }
   },
 
+  async assertClipCount(actions, params) {
+    const expected = params.expected as number;
+    const actual = await actions.getClipCount();
+    if (actual !== expected) {
+      throw new Error(
+        `assertClipCount: expected ${expected}, got ${actual}`
+      );
+    }
+  },
+
+  async assertMarkerCount(actions, params) {
+    const expected = params.expected as number;
+    const actual = await actions.getMarkerCount();
+    if (actual !== expected) {
+      throw new Error(
+        `assertMarkerCount: expected ${expected}, got ${actual}`
+      );
+    }
+  },
+
   async assertSelectorVisible(actions, params) {
     const testId = params.testId as string;
     await actions.waitForSelector(testId, (params.timeout as number) ?? 5000);
+  },
+
+  async assertSelectorHidden(actions, params) {
+    const testId = params.testId as string;
+    await actions.waitForSelectorHidden(
+      testId,
+      (params.timeout as number) ?? 5000
+    );
   },
 
   async assertTextContains(actions, params) {
@@ -62,6 +90,16 @@ const builtinAsserts: Record<string, AssertHandler> = {
     if (!text.includes(substring)) {
       throw new Error(
         `assertTextContains: "${testId}" text does not contain "${substring}". Actual: "${text}"`
+      );
+    }
+  },
+
+  async assertPreviewTimeContains(actions, params) {
+    const substring = params.contains as string;
+    const text = await actions.getPreviewTimeDisplay();
+    if (!text.includes(substring)) {
+      throw new Error(
+        `assertPreviewTimeContains: preview time display does not contain "${substring}". Actual: "${text}"`
       );
     }
   },
@@ -145,7 +183,14 @@ function paramsToArgs(
     waitForTaskState: ["kind", "state", "timeout"],
     retryTask: ["taskId"],
     cancelTask: ["taskId"],
+    clickClip: ["clipId"],
+    switchTab: ["tab"],
+    clickMarkerRow: ["index"],
+    fillMarkerLabel: ["text"],
+    fillMarkerPrompt: ["text"],
+    waitMs: ["ms"],
     waitForSelector: ["testId", "timeout"],
+    waitForSelectorHidden: ["testId", "timeout"],
     getTextByTestId: ["testId"],
     screenshot: ["name"],
   };

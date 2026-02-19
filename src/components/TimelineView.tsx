@@ -231,6 +231,7 @@ function ClipBlock({
   return (
     <div
       ref={blockRef}
+      data-testid={`clip-block-${clip.clipId}`}
       className={`absolute top-1 rounded overflow-hidden cursor-grab active:cursor-grabbing border ${
         selected
           ? "border-blue-500 ring-1 ring-blue-500/50"
@@ -304,7 +305,7 @@ function TrackLane({
   }, [assets]);
 
   return (
-    <div className="flex border-b border-zinc-800">
+    <div data-testid={`track-lane-${trackName}`} className="flex border-b border-zinc-800">
       <div className="w-24 shrink-0 px-2 flex items-center text-[10px] text-zinc-400 bg-zinc-900/50 border-r border-zinc-800">
         {trackName}
       </div>
@@ -467,12 +468,13 @@ export function TimelineView() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-zinc-950">
+    <div data-testid="timeline-view" className="flex flex-col h-full bg-zinc-950">
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800 bg-zinc-900/50">
         <span className="text-xs text-zinc-400 font-semibold">时间轴</span>
 
         <button
+          data-testid="btn-add-to-timeline"
           onClick={handleAddClip}
           disabled={!selectedAssetId}
           className="px-2 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 rounded text-white"
@@ -482,6 +484,7 @@ export function TimelineView() {
 
         {selectedClipId && (
           <button
+            data-testid="btn-delete-clip"
             onClick={handleDeleteClip}
             className="px-2 py-0.5 text-[10px] bg-red-600/80 hover:bg-red-500 rounded text-white"
           >
@@ -494,6 +497,7 @@ export function TimelineView() {
           {ZOOM_LEVELS.map((z) => (
             <button
               key={z}
+              data-testid={`btn-zoom-${z}`}
               onClick={() => setZoom(z)}
               className={`px-1.5 py-0.5 text-[10px] rounded ${
                 zoomLevel === z
@@ -506,7 +510,7 @@ export function TimelineView() {
           ))}
         </div>
 
-        <span className="text-[10px] text-zinc-500 font-mono ml-2">
+        <span data-testid="timeline-playhead-time" className="text-[10px] text-zinc-500 font-mono ml-2">
           {formatMs(playheadMs)}
         </span>
       </div>
