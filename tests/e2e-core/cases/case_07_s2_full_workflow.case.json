@@ -39,7 +39,7 @@
 
     { "action": "assertSelectorVisible", "params": { "testId": "preview-player" } },
     { "action": "assertSelectorVisible", "params": { "testId": "timeline-view" } },
-    { "action": "assertPreviewTimeContains", "params": { "contains": "00:00.000" } },
+    { "action": "assertPreviewTimeContains", "params": { "contains": "00:00.00" } },
 
     { "action": "screenshot", "params": { "name": "s2-full-workflow-complete" } },
     { "action": "close" }

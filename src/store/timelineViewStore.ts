@@ -25,7 +25,7 @@ export const useTimelineViewStore = create<TimelineViewState>((set) => ({
   scrollLeftMs: 0,
   selectedClipId: null,
 
-  setPlayhead: (ms) => set({ playheadMs: Math.max(0, ms) }),
+  setPlayhead: (ms) => set({ playheadMs: Math.max(0, Math.round(ms)) }),
   play: () => set({ isPlaying: true }),
   pause: () => set({ isPlaying: false }),
   togglePlay: () => set((s) => ({ isPlaying: !s.isPlaying })),
@@ -43,9 +43,10 @@ export function pixelsToMs(px: number, zoomLevel: number): number {
 }
 
 export function formatMs(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
+  const rounded = Math.round(ms);
+  const totalSec = Math.floor(rounded / 1000);
   const minutes = Math.floor(totalSec / 60);
   const seconds = totalSec % 60;
-  const millis = ms % 1000;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
+  const centis = Math.floor((rounded % 1000) / 10);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(centis).padStart(2, "0")}`;
 }

@@ -16,7 +16,7 @@
     { "action": "assertSelectorVisible", "params": { "testId": "preview-seek-bar" } },
     { "action": "assertSelectorVisible", "params": { "testId": "preview-time-display" } },
     { "action": "assertSelectorVisible", "params": { "testId": "btn-capture-frame" } },
-    { "action": "assertPreviewTimeContains", "params": { "contains": "00:00.000" } },
+    { "action": "assertPreviewTimeContains", "params": { "contains": "00:00.00" } },
 
     { "action": "switchTab", "params": { "tab": "tasks" } },
     { "action": "waitForSelector", "params": { "testId": "task-panel" } },
