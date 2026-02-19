@@ -5,8 +5,8 @@ mod state;
 mod task;
 
 use project::model::{
-    Asset, DraftTrackIds, Indexes, ProjectFile, ProjectMeta, ProjectPaths, ProjectSettings,
-    Resolution, Task, TaskError, TaskEvent, TaskRetries, Timeline, Timebase, Track,
+    Asset, Clip, DraftTrackIds, Indexes, Marker, ProjectFile, ProjectMeta, ProjectPaths,
+    ProjectSettings, Resolution, Task, TaskError, TaskEvent, TaskRetries, Timeline, Timebase, Track,
 };
 use state::{AppState, LoadedProject};
 use std::collections::HashMap;
@@ -39,7 +39,7 @@ async fn create_project(
     let now = chrono::Utc::now().to_rfc3339();
 
     let pf = ProjectFile {
-        schema_version: "0.1".to_string(),
+        schema_version: "0.2".to_string(),
         project: ProjectMeta {
             project_id: format!("proj_{}", uuid::Uuid::new_v4()),
             name,
@@ -80,26 +80,30 @@ async fn create_project(
                     track_id: video_track_id,
                     track_type: "video".to_string(),
                     name: "Draft Video".to_string(),
-                    clips: vec![],
+                    clip_ids: vec![],
                 },
                 Track {
                     track_id: audio_track_id,
                     track_type: "audio".to_string(),
                     name: "Draft Audio".to_string(),
-                    clips: vec![],
+                    clip_ids: vec![],
                 },
                 Track {
                     track_id: text_track_id,
                     track_type: "text".to_string(),
                     name: "Notes / Prompts".to_string(),
-                    clips: vec![],
+                    clip_ids: vec![],
                 },
             ],
+            clips: HashMap::new(),
+            markers: vec![],
+            duration_ms: 0,
         },
         exports: vec![],
         indexes: Indexes {
             asset_by_id: HashMap::new(),
             task_by_id: HashMap::new(),
+            clip_by_id: HashMap::new(),
         },
     };
 
@@ -549,6 +553,323 @@ async fn task_list(
 }
 
 // ============================================================
+// Timeline Commands
+// ============================================================
+
+#[tauri::command]
+async fn timeline_add_clip(
+    track_id: String,
+    asset_id: String,
+    start_ms: i64,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<Clip, String> {
+    let mut guard = state.inner.lock().await;
+    let loaded = guard.as_mut().ok_or("没有打开的项目")?;
+
+    let asset = loaded
+        .project
+        .assets
+        .iter()
+        .find(|a| a.asset_id == asset_id)
+        .ok_or(format!("Asset not found: {}", asset_id))?;
+
+    let duration_sec = asset
+        .meta
+        .get("durationSec")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(5.0);
+    let duration_ms = (duration_sec * 1000.0) as i64;
+
+    let track = loaded
+        .project
+        .timeline
+        .tracks
+        .iter_mut()
+        .find(|t| t.track_id == track_id)
+        .ok_or(format!("Track not found: {}", track_id))?;
+
+    let clip_id = format!(
+        "clip_{}",
+        &uuid::Uuid::new_v4().to_string().replace("-", "")[..8]
+    );
+
+    let clip = Clip {
+        clip_id: clip_id.clone(),
+        asset_id,
+        track_id: track_id.clone(),
+        start_ms: start_ms.max(0),
+        duration_ms,
+        in_ms: 0,
+        out_ms: duration_ms,
+    };
+
+    track.clip_ids.push(clip_id.clone());
+    loaded
+        .project
+        .timeline
+        .clips
+        .insert(clip_id.clone(), clip.clone());
+    loaded.project.timeline.recalc_duration();
+    loaded.project.rebuild_indexes();
+    loaded.dirty = true;
+
+    drop(guard);
+    let _ = app_handle.emit("project:updated", ());
+    state.save_notify.notify_one();
+
+    Ok(clip)
+}
+
+#[tauri::command]
+async fn timeline_move_clip(
+    clip_id: String,
+    new_start_ms: i64,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let mut guard = state.inner.lock().await;
+    let loaded = guard.as_mut().ok_or("没有打开的项目")?;
+
+    let clip = loaded
+        .project
+        .timeline
+        .clips
+        .get_mut(&clip_id)
+        .ok_or(format!("Clip not found: {}", clip_id))?;
+
+    clip.start_ms = new_start_ms.max(0);
+    loaded.project.timeline.recalc_duration();
+    loaded.dirty = true;
+
+    drop(guard);
+    let _ = app_handle.emit("project:updated", ());
+    state.save_notify.notify_one();
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn timeline_trim_clip(
+    clip_id: String,
+    in_ms: Option<i64>,
+    out_ms: Option<i64>,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let mut guard = state.inner.lock().await;
+    let loaded = guard.as_mut().ok_or("没有打开的项目")?;
+
+    let clip = loaded
+        .project
+        .timeline
+        .clips
+        .get_mut(&clip_id)
+        .ok_or(format!("Clip not found: {}", clip_id))?;
+
+    if let Some(new_in) = in_ms {
+        if new_in < 0 {
+            return Err("inMs cannot be negative".to_string());
+        }
+        clip.in_ms = new_in;
+    }
+    if let Some(new_out) = out_ms {
+        clip.out_ms = new_out;
+    }
+
+    if clip.out_ms <= clip.in_ms {
+        return Err("outMs must be greater than inMs".to_string());
+    }
+
+    clip.duration_ms = clip.out_ms - clip.in_ms;
+    loaded.project.timeline.recalc_duration();
+    loaded.dirty = true;
+
+    drop(guard);
+    let _ = app_handle.emit("project:updated", ());
+    state.save_notify.notify_one();
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn timeline_remove_clip(
+    clip_id: String,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let mut guard = state.inner.lock().await;
+    let loaded = guard.as_mut().ok_or("没有打开的项目")?;
+
+    loaded.project.timeline.clips.remove(&clip_id);
+
+    for track in &mut loaded.project.timeline.tracks {
+        track.clip_ids.retain(|id| id != &clip_id);
+    }
+
+    loaded.project.timeline.recalc_duration();
+    loaded.project.rebuild_indexes();
+    loaded.dirty = true;
+
+    // Force save on deletion
+    project::io::write_project_atomic(&loaded.json_path, &loaded.project)?;
+    loaded.dirty = false;
+
+    drop(guard);
+    let _ = app_handle.emit("project:updated", ());
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn timeline_reorder_clips(
+    track_id: String,
+    clip_ids: Vec<String>,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let mut guard = state.inner.lock().await;
+    let loaded = guard.as_mut().ok_or("没有打开的项目")?;
+
+    let track = loaded
+        .project
+        .timeline
+        .tracks
+        .iter_mut()
+        .find(|t| t.track_id == track_id)
+        .ok_or(format!("Track not found: {}", track_id))?;
+
+    for cid in &clip_ids {
+        if !track.clip_ids.contains(cid) {
+            return Err(format!("Clip {} not in track {}", cid, track_id));
+        }
+    }
+
+    track.clip_ids = clip_ids;
+    loaded.dirty = true;
+
+    drop(guard);
+    let _ = app_handle.emit("project:updated", ());
+    state.save_notify.notify_one();
+
+    Ok(())
+}
+
+// ============================================================
+// Marker Commands
+// ============================================================
+
+#[tauri::command]
+async fn marker_add(
+    t_ms: i64,
+    label: Option<String>,
+    prompt_text: Option<String>,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<Marker, String> {
+    let mut guard = state.inner.lock().await;
+    let loaded = guard.as_mut().ok_or("没有打开的项目")?;
+
+    let marker = Marker {
+        marker_id: format!(
+            "mkr_{}",
+            &uuid::Uuid::new_v4().to_string().replace("-", "")[..8]
+        ),
+        t_ms,
+        label: label.unwrap_or_default(),
+        prompt_text: prompt_text.unwrap_or_default(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+
+    loaded.project.timeline.markers.push(marker.clone());
+    loaded
+        .project
+        .timeline
+        .markers
+        .sort_by_key(|m| m.t_ms);
+    loaded.dirty = true;
+
+    drop(guard);
+    let _ = app_handle.emit("project:updated", ());
+    state.save_notify.notify_one();
+
+    Ok(marker)
+}
+
+#[tauri::command]
+async fn marker_update(
+    marker_id: String,
+    label: Option<String>,
+    prompt_text: Option<String>,
+    t_ms: Option<i64>,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let mut guard = state.inner.lock().await;
+    let loaded = guard.as_mut().ok_or("没有打开的项目")?;
+
+    let marker = loaded
+        .project
+        .timeline
+        .markers
+        .iter_mut()
+        .find(|m| m.marker_id == marker_id)
+        .ok_or(format!("Marker not found: {}", marker_id))?;
+
+    if let Some(l) = label {
+        marker.label = l;
+    }
+    if let Some(p) = prompt_text {
+        marker.prompt_text = p;
+    }
+    if let Some(t) = t_ms {
+        marker.t_ms = t;
+    }
+
+    loaded
+        .project
+        .timeline
+        .markers
+        .sort_by_key(|m| m.t_ms);
+    loaded.dirty = true;
+
+    drop(guard);
+    let _ = app_handle.emit("project:updated", ());
+    state.save_notify.notify_one();
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn marker_remove(
+    marker_id: String,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let mut guard = state.inner.lock().await;
+    let loaded = guard.as_mut().ok_or("没有打开的项目")?;
+
+    let before_len = loaded.project.timeline.markers.len();
+    loaded
+        .project
+        .timeline
+        .markers
+        .retain(|m| m.marker_id != marker_id);
+
+    if loaded.project.timeline.markers.len() == before_len {
+        return Err(format!("Marker not found: {}", marker_id));
+    }
+
+    loaded.dirty = true;
+
+    drop(guard);
+    let _ = app_handle.emit("project:updated", ());
+    state.save_notify.notify_one();
+
+    Ok(())
+}
+
+// ============================================================
 // Helpers
 // ============================================================
 
@@ -573,11 +894,38 @@ fn guess_asset_type(path: &Path) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app_state = AppState::new();
+    let state_for_protocol = app_state.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .register_uri_scheme_protocol("media", move |_ctx, request| {
+            let state = state_for_protocol.clone();
+            let uri = request.uri().to_string();
+
+            let (asset_id, prefer_proxy) = parse_media_uri(&uri);
+
+            let rt = tokio::runtime::Handle::current();
+            let join_result = std::thread::spawn(move || {
+                rt.block_on(async {
+                    serve_media_asset(&state, &asset_id, prefer_proxy).await
+                })
+            })
+            .join();
+
+            match join_result {
+                Ok(Ok(resp)) => resp,
+                Ok(Err(e)) => tauri::http::Response::builder()
+                    .status(500)
+                    .body(e.into_bytes())
+                    .unwrap(),
+                Err(_) => tauri::http::Response::builder()
+                    .status(500)
+                    .body(b"media protocol thread panic".to_vec())
+                    .unwrap(),
+            }
+        })
         .manage(app_state.clone())
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -608,7 +956,96 @@ pub fn run() {
             task_retry,
             task_cancel,
             task_list,
+            timeline_add_clip,
+            timeline_move_clip,
+            timeline_trim_clip,
+            timeline_remove_clip,
+            timeline_reorder_clips,
+            marker_add,
+            marker_update,
+            marker_remove,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn parse_media_uri(uri: &str) -> (String, bool) {
+    let path = uri
+        .strip_prefix("media://localhost/")
+        .or_else(|| uri.strip_prefix("media://"))
+        .unwrap_or(uri);
+
+    let (path_part, query) = match path.split_once('?') {
+        Some((p, q)) => (p, q),
+        None => (path, ""),
+    };
+
+    let asset_id = path_part.to_string();
+    let prefer_proxy = query.contains("proxy=1");
+
+    (asset_id, prefer_proxy)
+}
+
+async fn serve_media_asset(
+    state: &Arc<AppState>,
+    asset_id: &str,
+    prefer_proxy: bool,
+) -> Result<tauri::http::Response<Vec<u8>>, String> {
+    let guard = state.inner.lock().await;
+    let loaded = guard.as_ref().ok_or("No project loaded")?;
+
+    let asset = loaded
+        .project
+        .assets
+        .iter()
+        .find(|a| a.asset_id == asset_id)
+        .ok_or(format!("Asset not found: {}", asset_id))?;
+
+    let file_path = if prefer_proxy {
+        asset
+            .meta
+            .get("proxyUri")
+            .and_then(|v| v.as_str())
+            .map(|p| loaded.project_dir.join(p))
+            .unwrap_or_else(|| loaded.project_dir.join(&asset.path))
+    } else {
+        loaded.project_dir.join(&asset.path)
+    };
+
+    drop(guard);
+
+    let bytes = std::fs::read(&file_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    let ext = file_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let content_type = match ext.as_str() {
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "mov" => "video/quicktime",
+        "mkv" => "video/x-matroska",
+        "avi" => "video/x-msvideo",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "aac" => "audio/aac",
+        "ogg" => "audio/ogg",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "application/octet-stream",
+    };
+
+    let len = bytes.len();
+    tauri::http::Response::builder()
+        .status(200)
+        .header("Content-Type", content_type)
+        .header("Content-Length", len)
+        .header("Access-Control-Allow-Origin", "*")
+        .body(bytes)
+        .map_err(|e| format!("Failed to build response: {}", e))
 }

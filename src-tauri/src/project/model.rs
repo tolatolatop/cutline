@@ -168,7 +168,7 @@ pub struct TaskEvent {
     pub msg: String,
 }
 
-// --- Timeline ---
+// --- Timeline v2 (normalized, ms integers) ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -176,6 +176,22 @@ pub struct Timeline {
     pub timeline_id: String,
     pub timebase: Timebase,
     pub tracks: Vec<Track>,
+    pub clips: HashMap<String, Clip>,
+    #[serde(default)]
+    pub markers: Vec<Marker>,
+    #[serde(default)]
+    pub duration_ms: i64,
+}
+
+impl Timeline {
+    pub fn recalc_duration(&mut self) {
+        self.duration_ms = self
+            .clips
+            .values()
+            .map(|c| c.start_ms + c.duration_ms)
+            .max()
+            .unwrap_or(0);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,7 +207,7 @@ pub struct Track {
     #[serde(rename = "type")]
     pub track_type: String,
     pub name: String,
-    pub clips: Vec<Clip>,
+    pub clip_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -199,19 +215,23 @@ pub struct Track {
 pub struct Clip {
     pub clip_id: String,
     pub asset_id: String,
-    pub range: TimeRange,
-    pub offset: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub segment_index: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_context_asset_id: Option<String>,
-    pub flags: HashMap<String, bool>,
+    pub track_id: String,
+    pub start_ms: i64,
+    pub duration_ms: i64,
+    pub in_ms: i64,
+    pub out_ms: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TimeRange {
-    pub start: f64,
-    pub end: f64,
+#[serde(rename_all = "camelCase")]
+pub struct Marker {
+    pub marker_id: String,
+    pub t_ms: i64,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub prompt_text: String,
+    pub created_at: String,
 }
 
 // --- Export ---
@@ -222,7 +242,8 @@ pub struct ExportRecord {
     pub export_id: String,
     pub status: String,
     pub preset: ExportPreset,
-    pub range: TimeRange,
+    pub start_ms: i64,
+    pub end_ms: i64,
     pub output_uri: String,
     pub created_at: String,
 }
@@ -242,6 +263,8 @@ pub struct ExportPreset {
 pub struct Indexes {
     pub asset_by_id: HashMap<String, usize>,
     pub task_by_id: HashMap<String, usize>,
+    #[serde(default)]
+    pub clip_by_id: HashMap<String, String>,
 }
 
 // --- Helper: rebuild indexes ---
@@ -250,6 +273,7 @@ impl ProjectFile {
     pub fn rebuild_indexes(&mut self) {
         self.indexes.asset_by_id.clear();
         self.indexes.task_by_id.clear();
+        self.indexes.clip_by_id.clear();
         for (i, asset) in self.assets.iter().enumerate() {
             self.indexes
                 .asset_by_id
@@ -257,6 +281,11 @@ impl ProjectFile {
         }
         for (i, task) in self.tasks.iter().enumerate() {
             self.indexes.task_by_id.insert(task.task_id.clone(), i);
+        }
+        for (clip_id, clip) in &self.timeline.clips {
+            self.indexes
+                .clip_by_id
+                .insert(clip_id.clone(), clip.track_id.clone());
         }
     }
 }

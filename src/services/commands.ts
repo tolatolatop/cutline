@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ProjectFile, Asset, TaskSummary } from "../models/project";
+import type { ProjectFile, Asset, Clip, Marker, TaskSummary } from "../models/project";
 
 export async function createProject(
   dirPath: string,
@@ -59,4 +59,67 @@ export async function readFileBase64(
   relativePath: string
 ): Promise<string> {
   return invoke("read_file_base64", { relativePath });
+}
+
+// ============================================================
+// Timeline Commands
+// ============================================================
+
+export async function timelineAddClip(
+  trackId: string,
+  assetId: string,
+  startMs: number
+): Promise<Clip> {
+  return invoke("timeline_add_clip", { trackId, assetId, startMs });
+}
+
+export async function timelineMoveClip(
+  clipId: string,
+  newStartMs: number
+): Promise<void> {
+  return invoke("timeline_move_clip", { clipId, newStartMs });
+}
+
+export async function timelineTrimClip(
+  clipId: string,
+  inMs?: number,
+  outMs?: number
+): Promise<void> {
+  return invoke("timeline_trim_clip", { clipId, inMs, outMs });
+}
+
+export async function timelineRemoveClip(clipId: string): Promise<void> {
+  return invoke("timeline_remove_clip", { clipId });
+}
+
+export async function timelineReorderClips(
+  trackId: string,
+  clipIds: string[]
+): Promise<void> {
+  return invoke("timeline_reorder_clips", { trackId, clipIds });
+}
+
+// ============================================================
+// Marker Commands
+// ============================================================
+
+export async function markerAdd(
+  tMs: number,
+  label?: string,
+  promptText?: string
+): Promise<Marker> {
+  return invoke("marker_add", { tMs, label, promptText });
+}
+
+export async function markerUpdate(
+  markerId: string,
+  label?: string,
+  promptText?: string,
+  tMs?: number
+): Promise<void> {
+  return invoke("marker_update", { markerId, label, promptText, tMs });
+}
+
+export async function markerRemove(markerId: string): Promise<void> {
+  return invoke("marker_remove", { markerId });
 }

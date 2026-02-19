@@ -26,8 +26,11 @@ export function buildMockScript(): string {
   }
 
   function makeProject(name) {
+    var videoTrackId = makeId();
+    var audioTrackId = makeId();
+    var textTrackId = makeId();
     return {
-      schemaVersion: "0.1.0",
+      schemaVersion: "0.2",
       project: {
         projectId: makeId(),
         name: name,
@@ -46,17 +49,24 @@ export function buildMockScript(): string {
           exportsDir: "workspace/exports",
         },
         timelineId: makeId(),
-        defaultDraftTrackIds: { video: makeId(), audio: makeId(), text: makeId() },
+        defaultDraftTrackIds: { video: videoTrackId, audio: audioTrackId, text: textTrackId },
       },
       assets: assets,
       tasks: tasks,
       timeline: {
         timelineId: makeId(),
-        timebase: { fps: 24, unit: "frames" },
-        tracks: [],
+        timebase: { fps: 24, unit: "seconds" },
+        tracks: [
+          { trackId: videoTrackId, type: "video", name: "Draft Video", clipIds: [] },
+          { trackId: audioTrackId, type: "audio", name: "Draft Audio", clipIds: [] },
+          { trackId: textTrackId, type: "text", name: "Notes / Prompts", clipIds: [] },
+        ],
+        clips: {},
+        markers: [],
+        durationMs: 0,
       },
       exports: [],
-      indexes: { assetById: {}, taskById: {} },
+      indexes: { assetById: {}, taskById: {}, clipById: {} },
     };
   }
 
@@ -152,6 +162,25 @@ export function buildMockScript(): string {
         return { taskId: t.taskId, kind: t.kind, state: t.state, createdAt: t.createdAt, updatedAt: t.updatedAt, progress: t.progress, error: t.error, retries: t.retries };
       });
     },
+    timeline_add_clip: function (args) {
+      var clipId = makeId();
+      var clip = { clipId: clipId, assetId: args.assetId, trackId: args.trackId, startMs: args.startMs || 0, durationMs: 1000, inMs: 0, outMs: 1000 };
+      project.timeline.clips[clipId] = clip;
+      var track = project.timeline.tracks.find(function(t) { return t.trackId === args.trackId; });
+      if (track) track.clipIds.push(clipId);
+      return clip;
+    },
+    timeline_move_clip: function () { return null; },
+    timeline_trim_clip: function () { return null; },
+    timeline_remove_clip: function () { return null; },
+    timeline_reorder_clips: function () { return null; },
+    marker_add: function (args) {
+      var marker = { markerId: makeId(), tMs: args.tMs || 0, label: args.label || "", promptText: args.promptText || "", createdAt: now() };
+      project.timeline.markers.push(marker);
+      return marker;
+    },
+    marker_update: function () { return null; },
+    marker_remove: function () { return null; },
   };
 
   // Dialog plugin handlers

@@ -113,7 +113,7 @@ export interface GenerationInfo {
 }
 
 // --- 任务 v1 ---
-export type TaskKind = "probe" | "thumb" | "proxy" | "generate" | "export";
+export type TaskKind = "probe" | "thumb" | "proxy" | "generate" | "export" | "capture_frame";
 export type TaskState = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
 export interface TaskProgress {
@@ -166,11 +166,14 @@ export interface TaskSummary {
   retries: TaskRetries;
 }
 
-// --- 时间轴 ---
+// --- 时间轴 v2 (normalized, ms integers) ---
 export interface Timeline {
   timelineId: string;
   timebase: { fps: number; unit: string };
   tracks: Track[];
+  clips: Record<string, Clip>;
+  markers: Marker[];
+  durationMs: number;
 }
 
 export type TrackType = "video" | "audio" | "text";
@@ -179,17 +182,25 @@ export interface Track {
   trackId: string;
   type: TrackType;
   name: string;
-  clips: Clip[];
+  clipIds: string[];
 }
 
 export interface Clip {
   clipId: string;
   assetId: string;
-  range: { start: number; end: number };
-  offset: number;
-  segmentIndex?: number;
-  promptContextAssetId?: string;
-  flags: Record<string, boolean>;
+  trackId: string;
+  startMs: number;
+  durationMs: number;
+  inMs: number;
+  outMs: number;
+}
+
+export interface Marker {
+  markerId: string;
+  tMs: number;
+  label: string;
+  promptText: string;
+  createdAt: string;
 }
 
 // --- 导出 ---
@@ -201,7 +212,8 @@ export interface ExportRecord {
     codec: string;
     bitrateKbps: number;
   };
-  range: { start: number; end: number };
+  startMs: number;
+  endMs: number;
   outputUri: string;
   createdAt: string;
 }
@@ -210,4 +222,5 @@ export interface ExportRecord {
 export interface Indexes {
   assetById: Record<string, number>;
   taskById: Record<string, number>;
+  clipById: Record<string, string>;
 }

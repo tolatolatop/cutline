@@ -25,13 +25,19 @@ interface ProjectState {
 function rebuildIndexes(pf: ProjectFile): ProjectFile {
   const assetById: Record<string, number> = {};
   const taskById: Record<string, number> = {};
+  const clipById: Record<string, string> = {};
   pf.assets.forEach((a, i) => {
     assetById[a.assetId] = i;
   });
   pf.tasks.forEach((t, i) => {
     taskById[t.taskId] = i;
   });
-  return { ...pf, indexes: { assetById, taskById } };
+  if (pf.timeline?.clips) {
+    for (const [clipId, clip] of Object.entries(pf.timeline.clips)) {
+      clipById[clipId] = clip.trackId;
+    }
+  }
+  return { ...pf, indexes: { assetById, taskById, clipById } };
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({

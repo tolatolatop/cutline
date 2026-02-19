@@ -11,21 +11,24 @@ export function createDefaultTimeline(): Timeline {
         trackId: `trk_v_${uuidv4()}`,
         type: "video",
         name: "Draft Video",
-        clips: [],
+        clipIds: [],
       },
       {
         trackId: `trk_a_${uuidv4()}`,
         type: "audio",
         name: "Draft Audio",
-        clips: [],
+        clipIds: [],
       },
       {
         trackId: `trk_t_${uuidv4()}`,
         type: "text",
         name: "Notes / Prompts",
-        clips: [],
+        clipIds: [],
       },
     ],
+    clips: {},
+    markers: [],
+    durationMs: 0,
   };
 }
 
@@ -60,7 +63,7 @@ export function createDefaultProject(name: string): ProjectFile {
   };
 
   return {
-    schemaVersion: "0.1",
+    schemaVersion: "0.2",
     project,
     assets: [],
     tasks: [],
@@ -69,6 +72,7 @@ export function createDefaultProject(name: string): ProjectFile {
     indexes: {
       assetById: {},
       taskById: {},
+      clipById: {},
     },
   };
 }
