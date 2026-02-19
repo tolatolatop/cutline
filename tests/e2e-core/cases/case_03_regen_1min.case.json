@@ -4,15 +4,12 @@
   "description": "导入视频素材后等待缩略图任务完成，验证任务状态流转和面板显示",
   "steps": [
     { "action": "launch" },
-    { "action": "clickNewProject" },
     { "action": "handleDirectoryPicker", "params": { "dir": "$TEMP_DIR" } },
     { "action": "handlePrompt", "params": { "value": "RegenTest" } },
+    { "action": "clickNewProject" },
     { "action": "waitForSelector", "params": { "testId": "project-info", "timeout": 10000 } },
+    { "action": "handleFilePicker", "params": { "fixtures": ["videos/sample.mp4"] } },
     { "action": "clickImport" },
-    {
-      "action": "handleFilePicker",
-      "params": { "fixtures": ["videos/sample.mp4"] }
-    },
     {
       "action": "waitForTaskState",
       "params": { "kind": "thumb", "state": "succeeded", "timeout": 60000 }

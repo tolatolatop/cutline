@@ -7,18 +7,12 @@
  * are routed to deterministic mock data.
  */
 
-import { v4 as uuid } from "uuid";
-
-// Re-export a serialisable mock factory (no closures over Node APIs).
-// This function body will be stringified and injected into the browser.
-
 export function buildMockScript(): string {
-  // The entire function below runs in the BROWSER context.
   return `
 (function () {
-  const assets = [];
-  const tasks = [];
-  let project = null;
+  var assets = [];
+  var tasks = [];
+  var project = null;
 
   function makeId() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
@@ -32,11 +26,10 @@ export function buildMockScript(): string {
   }
 
   function makeProject(name) {
-    const pid = makeId();
     return {
       schemaVersion: "0.1.0",
       project: {
-        projectId: pid,
+        projectId: makeId(),
         name: name,
         createdAt: now(),
         updatedAt: now(),
@@ -67,10 +60,10 @@ export function buildMockScript(): string {
     };
   }
 
-  function guessType(path) {
-    var ext = path.split(".").pop().toLowerCase();
-    if (["mp4","mov","avi","mkv","webm","flv","wmv"].includes(ext)) return "video";
-    if (["mp3","wav","aac","flac","ogg","wma"].includes(ext)) return "audio";
+  function guessType(p) {
+    var ext = p.split(".").pop().toLowerCase();
+    if (["mp4","mov","avi","mkv","webm","flv","wmv"].indexOf(ext) >= 0) return "video";
+    if (["mp3","wav","aac","flac","ogg","wma"].indexOf(ext) >= 0) return "audio";
     return "image";
   }
 
@@ -91,7 +84,7 @@ export function buildMockScript(): string {
       type: type,
       source: "uploaded",
       fingerprint: { algo: "sha256", value: makeId() + makeId(), basis: "file_bytes" },
-      path: "workspace/assets/" + type + "/" + filePath.split(/[\\\\/]/).pop(),
+      path: "workspace/assets/" + type + "/" + filePath.split(/[\\\\\\/]/).pop(),
       meta: makeMeta(type),
       tags: [],
       createdAt: now(),
@@ -99,7 +92,6 @@ export function buildMockScript(): string {
     assets.push(asset);
     project.indexes.assetById[asset.assetId] = assets.length - 1;
 
-    // Create thumb task
     var thumbTask = {
       taskId: makeId(),
       kind: "thumb",
@@ -135,7 +127,7 @@ export function buildMockScript(): string {
     return asset;
   }
 
-  const handlers = {
+  var handlers = {
     create_project: function (args) {
       project = makeProject(args.name || "Untitled");
       return project;
@@ -144,77 +136,84 @@ export function buildMockScript(): string {
       if (!project) project = makeProject("Opened Project");
       return project;
     },
-    save_project: function () {
-      return null;
-    },
-    get_project: function () {
-      return project;
-    },
+    save_project: function () { return null; },
+    get_project: function () { return project; },
     import_assets: function (args) {
       var paths = args.filePaths || [];
       return paths.map(function (p) { return importAsset(p); });
     },
-    probe_media: function () {
-      return {};
-    },
-    read_file_base64: function () {
-      return "";
-    },
-    task_enqueue: function () {
-      return makeId();
-    },
-    task_retry: function () {
-      return null;
-    },
-    task_cancel: function () {
-      return null;
-    },
+    probe_media: function () { return {}; },
+    read_file_base64: function () { return ""; },
+    task_enqueue: function () { return makeId(); },
+    task_retry: function () { return null; },
+    task_cancel: function () { return null; },
     task_list: function () {
       return tasks.map(function (t) {
-        return {
-          taskId: t.taskId,
-          kind: t.kind,
-          state: t.state,
-          createdAt: t.createdAt,
-          updatedAt: t.updatedAt,
-          progress: t.progress,
-          error: t.error,
-          retries: t.retries,
-        };
+        return { taskId: t.taskId, kind: t.kind, state: t.state, createdAt: t.createdAt, updatedAt: t.updatedAt, progress: t.progress, error: t.error, retries: t.retries };
       });
     },
   };
 
-  if (!window.__TAURI_INTERNALS__) {
-    window.__TAURI_INTERNALS__ = {
-      invoke: function (cmd, args) {
-        var handler = handlers[cmd];
-        if (handler) {
-          return Promise.resolve(handler(args || {}));
-        }
-        console.warn("[tauri-mock] unhandled command:", cmd, args);
-        return Promise.resolve(null);
-      },
-      transformCallback: function (callback) {
-        var id = Math.random();
-        window["_" + id] = callback;
-        return id;
-      },
-      metadata: { currentWebview: { label: "main" }, currentWindow: { label: "main" } },
-    };
-  }
+  // Dialog plugin handlers
+  // Note: the dialog plugin wraps args inside { options: { ... } }
+  var dialogHandlers = {
+    "plugin:dialog|open": function (args) {
+      var opts = (args && args.options) || args || {};
+      if (opts.directory) {
+        var dir = window.__TAURI_MOCK_DIALOG_DIR__ || null;
+        window.__TAURI_MOCK_DIALOG_DIR__ = null;
+        return dir;
+      }
+      if (opts.multiple) {
+        var files = window.__TAURI_MOCK_DIALOG_FILES__ || null;
+        window.__TAURI_MOCK_DIALOG_FILES__ = null;
+        return files;
+      }
+      var files2 = window.__TAURI_MOCK_DIALOG_FILES__ || null;
+      window.__TAURI_MOCK_DIALOG_FILES__ = null;
+      return files2;
+    },
+    "plugin:dialog|save": function () { return null; },
+    "plugin:dialog|message": function () { return null; },
+    "plugin:dialog|ask": function () { return true; },
+    "plugin:dialog|confirm": function () { return true; },
+  };
 
-  // Also mock the event listener to prevent errors
-  if (!window.__TAURI_INTERNALS__.invoke.__patched) {
-    var origInvoke = window.__TAURI_INTERNALS__.invoke;
-    window.__TAURI_INTERNALS__.invoke = function (cmd, args) {
+  window.__TAURI_INTERNALS__ = {
+    invoke: function (cmd, args, options) {
+      // Event plugin
       if (cmd === "plugin:event|listen" || cmd === "plugin:event|unlisten") {
         return Promise.resolve(Math.floor(Math.random() * 1000000));
       }
-      return origInvoke(cmd, args);
-    };
-    window.__TAURI_INTERNALS__.invoke.__patched = true;
-  }
+      // Dialog plugin
+      if (dialogHandlers[cmd]) {
+        return Promise.resolve(dialogHandlers[cmd](args || {}));
+      }
+      // App commands
+      if (handlers[cmd]) {
+        return Promise.resolve(handlers[cmd](args || {}));
+      }
+      // FS plugin — ignore silently
+      if (cmd.indexOf("plugin:fs|") === 0) {
+        return Promise.resolve(null);
+      }
+      // Opener plugin
+      if (cmd.indexOf("plugin:opener|") === 0) {
+        return Promise.resolve(null);
+      }
+      console.warn("[tauri-mock] unhandled command:", cmd, args);
+      return Promise.resolve(null);
+    },
+    transformCallback: function (callback) {
+      var id = Math.floor(Math.random() * 1000000);
+      window["_" + id] = callback;
+      return id;
+    },
+    metadata: {
+      currentWebview: { label: "main" },
+      currentWindow: { label: "main" },
+    },
+  };
 })();
 `;
 }

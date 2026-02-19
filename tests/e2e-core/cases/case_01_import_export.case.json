@@ -4,15 +4,12 @@
   "description": "创建新项目，导入图片和视频素材，验证素材计数、筛选和元数据面板",
   "steps": [
     { "action": "launch" },
-    { "action": "clickNewProject" },
     { "action": "handleDirectoryPicker", "params": { "dir": "$TEMP_DIR" } },
     { "action": "handlePrompt", "params": { "value": "TestProject" } },
+    { "action": "clickNewProject" },
     { "action": "waitForSelector", "params": { "testId": "project-info", "timeout": 10000 } },
+    { "action": "handleFilePicker", "params": { "fixtures": ["images/sample.png", "videos/sample.mp4"] } },
     { "action": "clickImport" },
-    {
-      "action": "handleFilePicker",
-      "params": { "fixtures": ["images/sample.png", "videos/sample.mp4"] }
-    },
     {
       "action": "waitForTaskState",
       "params": { "kind": "thumb", "state": "succeeded", "timeout": 30000 }

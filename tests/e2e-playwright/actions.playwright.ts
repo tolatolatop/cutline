@@ -1,8 +1,11 @@
 import type { Page } from "@playwright/test";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { DriverActions } from "../e2e-core/lib/actions";
 import { buildMockScript } from "./tauri-mock";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const FIXTURES_DIR = path.resolve(__dirname, "../e2e-core/fixtures");
 
 function testIdSelector(testId: string): string {
@@ -133,14 +136,15 @@ export class PlaywrightActions implements DriverActions {
   }
 
   async getTaskCount(state?: string): Promise<number> {
-    if (!state || state === "all") {
-      const rows = this.page.locator(
-        '[data-testid="task-panel"] [class*="border-b border-zinc-800"]'
-      );
-      return rows.count();
-    }
-
     return this.page.evaluate((s) => {
+      const panel = document.querySelector('[data-testid="task-panel"]');
+      if (!panel) return 0;
+      // Task rows live inside the scrollable container (last child with overflow-y-auto)
+      const scrollArea = panel.querySelector(".overflow-y-auto");
+      if (!scrollArea) return 0;
+      const rows = scrollArea.querySelectorAll(":scope > [class*='border-b']");
+      if (!s || s === "all") return rows.length;
+
       const stateMap: Record<string, string> = {
         queued: "排队中",
         running: "执行中",
@@ -149,9 +153,6 @@ export class PlaywrightActions implements DriverActions {
         canceled: "已取消",
       };
       const label = stateMap[s] || s;
-      const panel = document.querySelector('[data-testid="task-panel"]');
-      if (!panel) return 0;
-      const rows = panel.querySelectorAll("[class*='border-b']");
       let count = 0;
       for (const row of rows) {
         if ((row.textContent || "").includes(label)) count++;
