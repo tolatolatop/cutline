@@ -1,0 +1,51 @@
+{
+  "id": "case_09_marker_jump_delete",
+  "name": "标记双击跳转与删除",
+  "description": "添加多个标记，双击标记跳转播放头，删除标记验证移除",
+  "steps": [
+    { "action": "launch" },
+    { "action": "handleDirectoryPicker", "params": { "dir": "$TEMP_DIR" } },
+    { "action": "handlePrompt", "params": { "value": "MarkerJumpTest" } },
+    { "action": "clickNewProject" },
+    { "action": "waitForSelector", "params": { "testId": "project-info", "timeout": 10000 } },
+
+    { "action": "handleFilePicker", "params": { "fixtures": ["videos/sample.mp4"] } },
+    { "action": "clickImport" },
+    {
+      "action": "waitForTaskState",
+      "params": { "kind": "thumb", "state": "succeeded", "timeout": 30000 }
+    },
+
+    { "action": "selectAsset", "params": { "index": 0 } },
+    { "action": "clickAddToTimeline" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+
+    { "action": "switchTab", "params": { "tab": "markers" } },
+    { "action": "waitForSelector", "params": { "testId": "marker-panel" } },
+
+    { "action": "clickAddMarker" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+    { "action": "assertMarkerCount", "params": { "expected": 1 } },
+
+    { "action": "clickAddMarker" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+    { "action": "assertMarkerCount", "params": { "expected": 2 } },
+
+    { "action": "doubleClickMarkerRow", "params": { "index": 0 } },
+    { "action": "waitMs", "params": { "ms": 200 } },
+    { "action": "assertPreviewTimeContains", "params": { "contains": "00:00.00" } },
+
+    { "action": "deleteMarkerByIndex", "params": { "index": 1 } },
+    { "action": "waitMs", "params": { "ms": 500 } },
+    { "action": "assertMarkerCount", "params": { "expected": 1 } },
+    { "action": "assertTextContains", "params": { "testId": "marker-count", "contains": "1" } },
+
+    { "action": "deleteMarkerByIndex", "params": { "index": 0 } },
+    { "action": "waitMs", "params": { "ms": 500 } },
+    { "action": "assertMarkerCount", "params": { "expected": 0 } },
+    { "action": "assertTextContains", "params": { "testId": "marker-count", "contains": "0" } },
+
+    { "action": "screenshot", "params": { "name": "markers-all-deleted" } },
+    { "action": "close" }
+  ]
+}

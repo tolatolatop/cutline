@@ -183,9 +183,61 @@ export class PlaywrightActions implements DriverActions {
     await this.page.click(testIdSelector(`clip-block-${clipId}`));
   }
 
+  async clickClipByIndex(index: number): Promise<void> {
+    const clips = this.page.locator('[data-testid^="clip-block-"]');
+    await clips.nth(index).click();
+  }
+
+  async dragClipByIndex(index: number, deltaXPx: number): Promise<void> {
+    const clip = this.page.locator('[data-testid^="clip-block-"]').nth(index);
+    const box = await clip.boundingBox();
+    if (!box) throw new Error(`Clip at index ${index} not found or not visible`);
+    const startX = box.x + box.width / 2;
+    const startY = box.y + box.height / 2;
+    await this.page.mouse.move(startX, startY);
+    await this.page.mouse.down();
+    await this.page.mouse.move(startX + deltaXPx, startY, { steps: 5 });
+    await this.page.mouse.up();
+    await this.page.waitForTimeout(100);
+  }
+
+  async trimClipByIndex(
+    index: number,
+    side: "left" | "right",
+    deltaXPx: number
+  ): Promise<void> {
+    const clip = this.page.locator('[data-testid^="clip-block-"]').nth(index);
+    const box = await clip.boundingBox();
+    if (!box) throw new Error(`Clip at index ${index} not found or not visible`);
+    const handleX = side === "left" ? box.x + 3 : box.x + box.width - 3;
+    const handleY = box.y + box.height / 2;
+    await this.page.mouse.move(handleX, handleY);
+    await this.page.mouse.down();
+    await this.page.mouse.move(handleX + deltaXPx, handleY, { steps: 5 });
+    await this.page.mouse.up();
+    await this.page.waitForTimeout(100);
+  }
+
   async getClipCount(): Promise<number> {
     const clips = this.page.locator('[data-testid^="clip-block-"]');
     return clips.count();
+  }
+
+  async getClipLeftPx(index: number): Promise<number> {
+    const clip = this.page.locator('[data-testid^="clip-block-"]').nth(index);
+    const style = await clip.getAttribute("style");
+    const match = style?.match(/left:\s*([\d.]+)px/);
+    return match ? parseFloat(match[1]) : 0;
+  }
+
+  async getClipWidthPx(index: number): Promise<number> {
+    const clip = this.page.locator('[data-testid^="clip-block-"]').nth(index);
+    const box = await clip.boundingBox();
+    return box?.width ?? 0;
+  }
+
+  async clickZoom(level: number): Promise<void> {
+    await this.page.click(testIdSelector(`btn-zoom-${level}`));
   }
 
   // ── Preview operations (S2) ──
@@ -223,6 +275,19 @@ export class PlaywrightActions implements DriverActions {
     const panel = this.page.locator(testIdSelector("marker-list"));
     const rows = panel.locator('[data-testid^="marker-row-"]');
     await rows.nth(index).click();
+  }
+
+  async doubleClickMarkerRow(index: number): Promise<void> {
+    const panel = this.page.locator(testIdSelector("marker-list"));
+    const rows = panel.locator('[data-testid^="marker-row-"]');
+    await rows.nth(index).dblclick();
+  }
+
+  async deleteMarkerByIndex(index: number): Promise<void> {
+    const panel = this.page.locator(testIdSelector("marker-list"));
+    const rows = panel.locator('[data-testid^="marker-row-"]');
+    const deleteBtn = rows.nth(index).locator('[data-testid^="btn-delete-marker-"]');
+    await deleteBtn.click();
   }
 
   async fillMarkerLabel(text: string): Promise<void> {

@@ -38,7 +38,13 @@ export interface DriverActions {
   clickAddToTimeline(): Promise<void>;
   clickDeleteClip(): Promise<void>;
   clickClip(clipId: string): Promise<void>;
+  clickClipByIndex(index: number): Promise<void>;
+  dragClipByIndex(index: number, deltaXPx: number): Promise<void>;
+  trimClipByIndex(index: number, side: "left" | "right", deltaXPx: number): Promise<void>;
   getClipCount(): Promise<number>;
+  getClipLeftPx(index: number): Promise<number>;
+  getClipWidthPx(index: number): Promise<number>;
+  clickZoom(level: number): Promise<void>;
 
   // ── Preview operations (S2) ──
   clickPlayPause(): Promise<void>;
@@ -50,6 +56,8 @@ export interface DriverActions {
   clickAddMarker(): Promise<void>;
   getMarkerCount(): Promise<number>;
   clickMarkerRow(index: number): Promise<void>;
+  doubleClickMarkerRow(index: number): Promise<void>;
+  deleteMarkerByIndex(index: number): Promise<void>;
   fillMarkerLabel(text: string): Promise<void>;
   fillMarkerPrompt(text: string): Promise<void>;
   clickSaveMarker(): Promise<void>;

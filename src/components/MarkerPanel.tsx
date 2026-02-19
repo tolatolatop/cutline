@@ -26,14 +26,11 @@ function MarkerRow({
           : "hover:bg-zinc-800/50"
       }`}
       onClick={onSelect}
+      onDoubleClick={onJump}
     >
       <div className="flex items-center gap-2">
         <span
-          className="text-[10px] font-mono text-yellow-400 cursor-pointer hover:underline shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            onJump();
-          }}
+          className="text-[10px] font-mono text-yellow-400 shrink-0"
         >
           {formatMs(marker.tMs)}
         </span>
@@ -41,6 +38,7 @@ function MarkerRow({
           {marker.label || "(无标签)"}
         </span>
         <button
+          data-testid={`btn-delete-marker-${marker.markerId}`}
           onClick={(e) => {
             e.stopPropagation();
             onDelete();

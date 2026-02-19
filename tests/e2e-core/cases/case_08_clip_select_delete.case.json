@@ -1,0 +1,42 @@
+{
+  "id": "case_08_clip_select_delete",
+  "name": "Clip 选中、属性面板与删除",
+  "description": "添加 clip 到时间轴，点击选中 clip，验证 Clip 属性面板可见，然后删除 clip 验证移除",
+  "steps": [
+    { "action": "launch" },
+    { "action": "handleDirectoryPicker", "params": { "dir": "$TEMP_DIR" } },
+    { "action": "handlePrompt", "params": { "value": "ClipSelectTest" } },
+    { "action": "clickNewProject" },
+    { "action": "waitForSelector", "params": { "testId": "project-info", "timeout": 10000 } },
+
+    { "action": "handleFilePicker", "params": { "fixtures": ["videos/sample.mp4"] } },
+    { "action": "clickImport" },
+    {
+      "action": "waitForTaskState",
+      "params": { "kind": "thumb", "state": "succeeded", "timeout": 30000 }
+    },
+
+    { "action": "selectAsset", "params": { "index": 0 } },
+    { "action": "clickAddToTimeline" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+    { "action": "assertClipCount", "params": { "expected": 1 } },
+
+    { "action": "clickClipByIndex", "params": { "index": 0 } },
+    { "action": "waitMs", "params": { "ms": 200 } },
+
+    { "action": "switchTab", "params": { "tab": "clip" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "clip-info-panel" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "clip-edit-start" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "clip-edit-in" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "clip-edit-out" } },
+    { "action": "assertSelectorVisible", "params": { "testId": "btn-apply-clip" } },
+
+    { "action": "assertSelectorVisible", "params": { "testId": "btn-delete-clip" } },
+    { "action": "clickDeleteClip" },
+    { "action": "waitMs", "params": { "ms": 500 } },
+    { "action": "assertClipCount", "params": { "expected": 0 } },
+
+    { "action": "screenshot", "params": { "name": "clip-deleted" } },
+    { "action": "close" }
+  ]
+}

@@ -70,6 +70,28 @@ const builtinAsserts: Record<string, AssertHandler> = {
     }
   },
 
+  async assertClipLeftGreaterThan(actions, params) {
+    const index = (params.index as number) ?? 0;
+    const minPx = params.minPx as number;
+    const actual = await actions.getClipLeftPx(index);
+    if (actual <= minPx) {
+      throw new Error(
+        `assertClipLeftGreaterThan: expected clip ${index} left > ${minPx}, got ${actual}`
+      );
+    }
+  },
+
+  async assertClipWidthChanged(actions, params) {
+    const index = (params.index as number) ?? 0;
+    const originalPx = params.originalPx as number;
+    const actual = await actions.getClipWidthPx(index);
+    if (Math.abs(actual - originalPx) < 2) {
+      throw new Error(
+        `assertClipWidthChanged: expected clip ${index} width to differ from ${originalPx}, got ${actual}`
+      );
+    }
+  },
+
   async assertSelectorVisible(actions, params) {
     const testId = params.testId as string;
     await actions.waitForSelector(testId, (params.timeout as number) ?? 5000);
@@ -184,8 +206,14 @@ function paramsToArgs(
     retryTask: ["taskId"],
     cancelTask: ["taskId"],
     clickClip: ["clipId"],
+    clickClipByIndex: ["index"],
+    dragClipByIndex: ["index", "deltaXPx"],
+    trimClipByIndex: ["index", "side", "deltaXPx"],
+    clickZoom: ["level"],
     switchTab: ["tab"],
     clickMarkerRow: ["index"],
+    doubleClickMarkerRow: ["index"],
+    deleteMarkerByIndex: ["index"],
     fillMarkerLabel: ["text"],
     fillMarkerPrompt: ["text"],
     waitMs: ["ms"],
