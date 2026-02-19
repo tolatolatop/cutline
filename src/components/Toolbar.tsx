@@ -59,6 +59,7 @@ export function Toolbar() {
     <div className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-700">
       <span className="text-sm font-bold text-zinc-300 mr-4">Cutline</span>
       <button
+        data-testid="btn-new-project"
         onClick={handleNew}
         disabled={loading}
         className="px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded disabled:opacity-50"
@@ -66,6 +67,7 @@ export function Toolbar() {
         新建项目
       </button>
       <button
+        data-testid="btn-open-project"
         onClick={handleOpen}
         disabled={loading}
         className="px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded disabled:opacity-50"
@@ -73,6 +75,7 @@ export function Toolbar() {
         打开项目
       </button>
       <button
+        data-testid="btn-save"
         onClick={handleSave}
         disabled={loading || !projectFile}
         className="px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded disabled:opacity-50"
@@ -80,6 +83,7 @@ export function Toolbar() {
         保存{isDirty ? " *" : ""}
       </button>
       <button
+        data-testid="btn-import"
         onClick={handleImport}
         disabled={loading || !projectFile}
         className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded disabled:opacity-50"

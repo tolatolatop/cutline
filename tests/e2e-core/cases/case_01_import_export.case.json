@@ -1,0 +1,32 @@
+{
+  "id": "case_01_import_export",
+  "name": "素材导入与项目验证",
+  "description": "创建新项目，导入图片和视频素材，验证素材计数、筛选和元数据面板",
+  "steps": [
+    { "action": "launch" },
+    { "action": "clickNewProject" },
+    { "action": "handleDirectoryPicker", "params": { "dir": "$TEMP_DIR" } },
+    { "action": "handlePrompt", "params": { "value": "TestProject" } },
+    { "action": "waitForSelector", "params": { "testId": "project-info", "timeout": 10000 } },
+    { "action": "clickImport" },
+    {
+      "action": "handleFilePicker",
+      "params": { "fixtures": ["images/sample.png", "videos/sample.mp4"] }
+    },
+    {
+      "action": "waitForTaskState",
+      "params": { "kind": "thumb", "state": "succeeded", "timeout": 30000 }
+    },
+    { "action": "assertAssetCount", "params": { "expected": 2 } },
+    { "action": "filterAssets", "params": { "type": "video" } },
+    { "action": "assertAssetCount", "params": { "expected": 1 } },
+    { "action": "filterAssets", "params": { "type": "image" } },
+    { "action": "assertAssetCount", "params": { "expected": 1 } },
+    { "action": "filterAssets", "params": { "type": "all" } },
+    { "action": "selectAsset", "params": { "index": 0 } },
+    { "action": "waitForSelector", "params": { "testId": "metadata-view", "timeout": 5000 } },
+    { "action": "clickSave" },
+    { "action": "screenshot", "params": { "name": "after-import" } },
+    { "action": "close" }
+  ]
+}

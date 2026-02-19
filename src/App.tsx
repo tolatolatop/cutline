@@ -11,7 +11,7 @@ function ProjectInfo() {
   const { project } = projectFile;
 
   return (
-    <div className="px-4 py-2 bg-zinc-900/50 border-b border-zinc-800 text-xs text-zinc-500 flex gap-4">
+    <div data-testid="project-info" className="px-4 py-2 bg-zinc-900/50 border-b border-zinc-800 text-xs text-zinc-500 flex gap-4">
       <span>
         分辨率: {project.settings.resolution.width}x
         {project.settings.resolution.height}
@@ -28,7 +28,7 @@ function ErrorBanner() {
   if (!error) return null;
 
   return (
-    <div className="px-4 py-2 bg-red-900/50 border-b border-red-800 text-xs text-red-300 flex items-center justify-between">
+    <div data-testid="error-banner" className="px-4 py-2 bg-red-900/50 border-b border-red-800 text-xs text-red-300 flex items-center justify-between">
       <span>错误: {error}</span>
       <button
         onClick={clearError}

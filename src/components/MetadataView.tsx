@@ -130,7 +130,7 @@ export function MetadataView() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div data-testid="metadata-view" className="flex-1 overflow-y-auto">
       <div className="px-3 py-2 text-xs text-zinc-400 font-semibold border-b border-zinc-800">
         素材详情
       </div>

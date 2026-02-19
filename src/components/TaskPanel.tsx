@@ -132,6 +132,7 @@ function TaskRow({ task }: { task: Task }) {
         <span className="ml-auto flex gap-1">
           {(task.state === "failed" || task.state === "canceled") && (
             <button
+              data-testid={`task-retry-${task.taskId}`}
               onClick={handleRetry}
               disabled={actionLoading}
               className="px-1.5 py-0.5 text-[10px] bg-blue-700 hover:bg-blue-600 text-white rounded disabled:opacity-50"
@@ -141,6 +142,7 @@ function TaskRow({ task }: { task: Task }) {
           )}
           {(task.state === "queued" || task.state === "running") && (
             <button
+              data-testid={`task-cancel-${task.taskId}`}
               onClick={handleCancel}
               disabled={actionLoading}
               className="px-1.5 py-0.5 text-[10px] bg-zinc-600 hover:bg-zinc-500 text-zinc-200 rounded disabled:opacity-50"
@@ -210,7 +212,7 @@ export function TaskPanel() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div data-testid="task-panel" className="flex flex-col h-full">
       <div className="px-3 py-2 text-xs text-zinc-400 font-semibold border-b border-zinc-800 flex items-center gap-2">
         <span>任务 ({tasks.length})</span>
         {counts.running > 0 && (
@@ -230,6 +232,7 @@ export function TaskPanel() {
           (f) => (
             <button
               key={f}
+              data-testid={`task-filter-${f}`}
               onClick={() => setFilter(f)}
               className={`px-2 py-0.5 text-[10px] rounded ${
                 filter === f

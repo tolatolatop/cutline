@@ -65,10 +65,12 @@ function AssetGridCard({
   asset,
   selected,
   onSelect,
+  testIndex,
 }: {
   asset: Asset;
   selected: boolean;
   onSelect: () => void;
+  testIndex: number;
 }) {
   const thumbPath = getThumbRelativePath(asset);
   const duration = getDuration(asset);
@@ -76,6 +78,7 @@ function AssetGridCard({
 
   return (
     <div
+      data-testid={`asset-card-${testIndex}`}
       onClick={onSelect}
       className={`relative cursor-pointer rounded overflow-hidden border-2 transition-colors ${
         selected ? "border-blue-500" : "border-zinc-800 hover:border-zinc-600"
@@ -118,16 +121,19 @@ function AssetListRow({
   asset,
   selected,
   onSelect,
+  testIndex,
 }: {
   asset: Asset;
   selected: boolean;
   onSelect: () => void;
+  testIndex: number;
 }) {
   const thumbPath = getThumbRelativePath(asset);
   const duration = getDuration(asset);
 
   return (
     <div
+      data-testid={`asset-card-${testIndex}`}
       onClick={onSelect}
       className={`flex items-center gap-2 px-3 py-2 cursor-pointer border-b border-zinc-800 text-sm ${
         selected
@@ -179,7 +185,7 @@ export function AssetLibrary() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div data-testid="asset-library" className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-3 py-2 text-xs text-zinc-400 font-semibold border-b border-zinc-800 flex items-center justify-between">
         <span>素材库 ({filtered.length})</span>
@@ -219,6 +225,7 @@ export function AssetLibrary() {
           return (
             <button
               key={f}
+              data-testid={`asset-filter-${f}`}
               onClick={() => setFilterType(f)}
               className={`px-2 py-0.5 text-[10px] rounded ${
                 filterType === f
@@ -242,24 +249,26 @@ export function AssetLibrary() {
       ) : viewMode === "grid" ? (
         <div className="flex-1 overflow-y-auto p-2">
           <div className="grid grid-cols-2 gap-2">
-            {filtered.map((asset) => (
+            {filtered.map((asset, idx) => (
               <AssetGridCard
                 key={asset.assetId}
                 asset={asset}
                 selected={selectedAssetId === asset.assetId}
                 onSelect={() => selectAsset(asset.assetId)}
+                testIndex={idx}
               />
             ))}
           </div>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          {filtered.map((asset) => (
+          {filtered.map((asset, idx) => (
             <AssetListRow
               key={asset.assetId}
               asset={asset}
               selected={selectedAssetId === asset.assetId}
               onSelect={() => selectAsset(asset.assetId)}
+              testIndex={idx}
             />
           ))}
         </div>
