@@ -2,6 +2,7 @@ mod asset;
 mod media;
 mod project;
 mod provider;
+mod providers;
 mod secrets;
 mod state;
 mod task;
@@ -994,6 +995,89 @@ async fn providers_test(
 }
 
 // ============================================================
+// Jimeng Provider Commands
+// ============================================================
+
+/// Helper: build a JimengClient from provider config + keyring, or a direct token.
+async fn build_jimeng_client(
+    app_handle: &tauri::AppHandle,
+    provider_name: &str,
+    profile_name: &str,
+    token_override: Option<&str>,
+) -> Result<providers::jimeng::client::JimengClient, String> {
+    let path = provider::io::providers_path(app_handle)?;
+    let file = provider::io::load_providers(&path)?;
+    let prov = file
+        .providers
+        .get(provider_name)
+        .ok_or(format!("provider_not_found: {}", provider_name))?;
+    let profile = prov
+        .profiles
+        .get(profile_name)
+        .ok_or(format!("profile_not_found: {}", profile_name))?;
+
+    let secret = match token_override {
+        Some(t) => t.to_string(),
+        None => secrets::get_secret(&profile.credential_ref)?
+            .ok_or("missing_credentials")?,
+    };
+
+    let timeout_secs = profile.timeout_ms / 1000;
+    providers::jimeng::client::JimengClient::new(
+        &secret,
+        Some(prov.base_url.as_str()),
+        timeout_secs.max(10),
+    )
+}
+
+#[tauri::command]
+async fn jimeng_generate_image(
+    provider_name: String,
+    profile_name: String,
+    prompt: String,
+    model: Option<String>,
+    ratio: Option<String>,
+    negative_prompt: Option<String>,
+    image_count: Option<u32>,
+    token: Option<String>,
+    app_handle: tauri::AppHandle,
+) -> Result<providers::jimeng::api::GenerateResult, String> {
+    let client = build_jimeng_client(&app_handle, &provider_name, &profile_name, token.as_deref()).await?;
+    providers::jimeng::api::generate_image(
+        &client,
+        &prompt,
+        model.as_deref().unwrap_or("jimeng-4.5"),
+        ratio.as_deref().unwrap_or("1:1"),
+        negative_prompt.as_deref().unwrap_or(""),
+        image_count.unwrap_or(4),
+    )
+    .await
+}
+
+#[tauri::command]
+async fn jimeng_task_status(
+    provider_name: String,
+    profile_name: String,
+    history_ids: Vec<String>,
+    token: Option<String>,
+    app_handle: tauri::AppHandle,
+) -> Result<serde_json::Value, String> {
+    let client = build_jimeng_client(&app_handle, &provider_name, &profile_name, token.as_deref()).await?;
+    providers::jimeng::api::get_task_status(&client, &history_ids).await
+}
+
+#[tauri::command]
+async fn jimeng_credit_balance(
+    provider_name: String,
+    profile_name: String,
+    token: Option<String>,
+    app_handle: tauri::AppHandle,
+) -> Result<providers::jimeng::api::CreditInfo, String> {
+    let client = build_jimeng_client(&app_handle, &provider_name, &profile_name, token.as_deref()).await?;
+    providers::jimeng::api::get_credit(&client).await
+}
+
+// ============================================================
 // Helpers
 // ============================================================
 
@@ -1091,6 +1175,9 @@ pub fn run() {
             secrets_exists,
             secrets_delete,
             providers_test,
+            jimeng_generate_image,
+            jimeng_task_status,
+            jimeng_credit_balance,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
