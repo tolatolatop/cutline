@@ -234,4 +234,30 @@ mod tests {
         assert_eq!(percent_encode("hello world"), "hello%20world");
         assert_eq!(percent_encode("a-b_c.d~e"), "a-b_c.d~e");
     }
+
+    #[test]
+    fn cookie_randomness_differs_between_calls() {
+        let a = generate_cookie("same_token");
+        let b = generate_cookie("same_token");
+        // sessionid fields will be identical but random fields (install_id, ttreq, etc.) should differ
+        assert_ne!(a, b, "two cookie generations should produce different random fields");
+    }
+
+    #[test]
+    fn cookie_csrf_tokens_are_hex() {
+        let cookie = generate_cookie("tok");
+        let parts: Vec<&str> = cookie.split("; ").collect();
+        for part in &parts {
+            if part.starts_with("passport_csrf_token=") && !part.contains("default") {
+                let val = part.strip_prefix("passport_csrf_token=").unwrap();
+                assert_eq!(val.len(), 32, "csrf_token should be 32 hex chars");
+                assert!(val.chars().all(|c| c.is_ascii_hexdigit()));
+            }
+            if part.starts_with("passport_csrf_token_default=") {
+                let val = part.strip_prefix("passport_csrf_token_default=").unwrap();
+                assert_eq!(val.len(), 32, "csrf_token_default should be 32 hex chars");
+                assert!(val.chars().all(|c| c.is_ascii_hexdigit()));
+            }
+        }
+    }
 }

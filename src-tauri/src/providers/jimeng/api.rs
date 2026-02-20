@@ -144,6 +144,32 @@ pub(crate) fn build_metrics_extra(
 }
 
 // ---------------------------------------------------------------------------
+// Response parsing helpers (extracted for testability)
+// ---------------------------------------------------------------------------
+
+fn parse_history_id(resp: &Value) -> String {
+    resp.pointer("/data/aigc_data/history_record_id")
+        .map(|v| match v {
+            Value::String(s) => s.clone(),
+            Value::Number(n) => n.to_string(),
+            _ => String::new(),
+        })
+        .unwrap_or_default()
+}
+
+fn parse_credit_response(resp: &Value) -> Result<CreditInfo, String> {
+    let credit = resp
+        .pointer("/data/credit")
+        .ok_or("Missing /data/credit in response")?;
+
+    Ok(CreditInfo {
+        gift_credit: credit.get("gift_credit").and_then(|v| v.as_f64()).unwrap_or(0.0),
+        purchase_credit: credit.get("purchase_credit").and_then(|v| v.as_f64()).unwrap_or(0.0),
+        vip_credit: credit.get("vip_credit").and_then(|v| v.as_f64()).unwrap_or(0.0),
+    })
+}
+
+// ---------------------------------------------------------------------------
 // API paths
 // ---------------------------------------------------------------------------
 
@@ -194,15 +220,7 @@ pub async fn generate_image(
     });
 
     let resp = client.post(GENERATE_PATH, &body, &internal_model, false, None).await?;
-
-    let history_id = resp
-        .pointer("/data/aigc_data/history_record_id")
-        .map(|v| match v {
-            Value::String(s) => s.clone(),
-            Value::Number(n) => n.to_string(),
-            _ => String::new(),
-        })
-        .unwrap_or_default();
+    let history_id = parse_history_id(&resp);
 
     Ok(GenerateResult {
         history_id,
@@ -243,28 +261,7 @@ pub async fn get_credit(client: &JimengClient) -> Result<CreditInfo, String> {
         .post(CREDIT_PATH, &json!({}), "", false, Some(&extra_headers))
         .await?;
 
-    let credit = resp
-        .pointer("/data/credit")
-        .ok_or("Missing /data/credit in response")?;
-
-    let gift = credit
-        .get("gift_credit")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0);
-    let purchase = credit
-        .get("purchase_credit")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0);
-    let vip = credit
-        .get("vip_credit")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0);
-
-    Ok(CreditInfo {
-        gift_credit: gift,
-        purchase_credit: purchase,
-        vip_credit: vip,
-    })
+    parse_credit_response(&resp)
 }
 
 #[cfg(test)]
@@ -395,5 +392,185 @@ mod tests {
         assert_eq!(json["giftCredit"], 100.0);
         assert_eq!(json["purchaseCredit"], 50.5);
         assert_eq!(json["vipCredit"], 0.0);
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_history_id
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_history_id_from_string() {
+        let resp = json!({
+            "data": { "aigc_data": { "history_record_id": "12977452690444" } }
+        });
+        assert_eq!(parse_history_id(&resp), "12977452690444");
+    }
+
+    #[test]
+    fn parse_history_id_from_number() {
+        let resp = json!({
+            "data": { "aigc_data": { "history_record_id": 12977452690444u64 } }
+        });
+        assert_eq!(parse_history_id(&resp), "12977452690444");
+    }
+
+    #[test]
+    fn parse_history_id_missing_field() {
+        let resp = json!({ "data": { "aigc_data": {} } });
+        assert_eq!(parse_history_id(&resp), "");
+    }
+
+    #[test]
+    fn parse_history_id_missing_aigc_data() {
+        let resp = json!({ "data": {} });
+        assert_eq!(parse_history_id(&resp), "");
+    }
+
+    #[test]
+    fn parse_history_id_empty_response() {
+        let resp = json!({});
+        assert_eq!(parse_history_id(&resp), "");
+    }
+
+    #[test]
+    fn parse_history_id_null_value() {
+        let resp = json!({
+            "data": { "aigc_data": { "history_record_id": null } }
+        });
+        assert_eq!(parse_history_id(&resp), "");
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_credit_response
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_credit_full_response() {
+        let resp = json!({
+            "data": {
+                "credit": {
+                    "gift_credit": 80.0,
+                    "purchase_credit": 0.0,
+                    "vip_credit": 2154.0
+                }
+            }
+        });
+        let credit = parse_credit_response(&resp).unwrap();
+        assert_eq!(credit.gift_credit, 80.0);
+        assert_eq!(credit.purchase_credit, 0.0);
+        assert_eq!(credit.vip_credit, 2154.0);
+    }
+
+    #[test]
+    fn parse_credit_integer_values() {
+        let resp = json!({
+            "data": {
+                "credit": {
+                    "gift_credit": 100,
+                    "purchase_credit": 50,
+                    "vip_credit": 0
+                }
+            }
+        });
+        let credit = parse_credit_response(&resp).unwrap();
+        assert_eq!(credit.gift_credit, 100.0);
+        assert_eq!(credit.purchase_credit, 50.0);
+        assert_eq!(credit.vip_credit, 0.0);
+    }
+
+    #[test]
+    fn parse_credit_missing_fields_default_to_zero() {
+        let resp = json!({
+            "data": { "credit": { "gift_credit": 42.0 } }
+        });
+        let credit = parse_credit_response(&resp).unwrap();
+        assert_eq!(credit.gift_credit, 42.0);
+        assert_eq!(credit.purchase_credit, 0.0);
+        assert_eq!(credit.vip_credit, 0.0);
+    }
+
+    #[test]
+    fn parse_credit_missing_credit_key() {
+        let resp = json!({ "data": {} });
+        assert!(parse_credit_response(&resp).is_err());
+    }
+
+    #[test]
+    fn parse_credit_empty_response() {
+        let resp = json!({});
+        assert!(parse_credit_response(&resp).is_err());
+    }
+
+    // -----------------------------------------------------------------------
+    // TaskStatusResult / TaskItem deserialization from mock API data
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn task_status_result_from_completed_response() {
+        let data = json!({
+            "status": 50,
+            "failCode": "0",
+            "itemList": [
+                { "url": "https://example.com/img1.webp", "width": 2048, "height": 2048 },
+                { "url": "https://example.com/img2.webp", "width": 2048, "height": 2048 }
+            ]
+        });
+        let result: TaskStatusResult = serde_json::from_value(data).unwrap();
+        assert_eq!(result.status, 50);
+        assert_eq!(result.fail_code, "0");
+        assert_eq!(result.item_list.len(), 2);
+        assert_eq!(result.item_list[0].url, "https://example.com/img1.webp");
+        assert_eq!(result.item_list[0].width, 2048);
+    }
+
+    #[test]
+    fn task_status_result_queued_empty_items() {
+        let data = json!({
+            "status": 20,
+            "failCode": "",
+            "itemList": []
+        });
+        let result: TaskStatusResult = serde_json::from_value(data).unwrap();
+        assert_eq!(result.status, 20);
+        assert!(result.item_list.is_empty());
+    }
+
+    #[test]
+    fn task_item_defaults_for_missing_fields() {
+        let data = json!({});
+        let item: TaskItem = serde_json::from_value(data).unwrap();
+        assert_eq!(item.url, "");
+        assert_eq!(item.width, 0);
+        assert_eq!(item.height, 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // draft seed range
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn draft_auto_seed_in_expected_range() {
+        for _ in 0..20 {
+            let draft = build_txt2img_draft("test", "m", "1:1", "", None, 0.5);
+            let v: Value = serde_json::from_str(&draft).unwrap();
+            let seed = v["component_list"][0]["abilities"]["generate"]["core_param"]["seed"]
+                .as_u64()
+                .unwrap();
+            assert!(
+                (2_500_000_000..2_600_000_000).contains(&seed),
+                "seed {} should be in [2.5B, 2.6B)",
+                seed
+            );
+        }
+    }
+
+    #[test]
+    fn draft_explicit_seed_used() {
+        let draft = build_txt2img_draft("test", "m", "1:1", "", Some(999), 0.5);
+        let v: Value = serde_json::from_str(&draft).unwrap();
+        let seed = v["component_list"][0]["abilities"]["generate"]["core_param"]["seed"]
+            .as_u64()
+            .unwrap();
+        assert_eq!(seed, 999);
     }
 }
