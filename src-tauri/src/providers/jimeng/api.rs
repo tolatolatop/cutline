@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use super::client::JimengClient;
-use super::constants::{get_aspect_ratio, resolve_model, DRAFT_VERSION};
+use super::constants::{get_aspect_ratio, resolve_model, APP_ID, AspectRatio, DRAFT_VERSION};
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -16,16 +18,19 @@ pub struct GenerateResult {
     pub submit_id: String,
 }
 
+/// Per-history task status, deserialized from API (snake_case) and serialized to frontend (camelCase).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct TaskStatusResult {
     pub status: u32,
+    #[serde(alias = "fail_code")]
     pub fail_code: String,
+    #[serde(alias = "item_list")]
     pub item_list: Vec<TaskItem>,
+    #[serde(alias = "history_record_id", default)]
+    pub history_record_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct TaskItem {
     #[serde(default)]
     pub url: String,
@@ -58,12 +63,11 @@ fn random_seed() -> u64 {
 pub(crate) fn build_txt2img_draft(
     prompt: &str,
     model: &str,
-    ratio: &str,
+    aspect: &AspectRatio,
     negative_prompt: &str,
     seed: Option<u64>,
     sample_strength: f64,
 ) -> String {
-    let aspect = get_aspect_ratio(ratio);
     let size = aspect.size_2k;
     let seed = seed.unwrap_or_else(random_seed);
 
@@ -81,6 +85,7 @@ pub(crate) fn build_txt2img_draft(
             "type": "image_base_component",
             "id": component_id,
             "min_version": DRAFT_VERSION,
+            "gen_type": 1,
             "generate_type": "generate",
             "aigc_mode": "workbench",
             "abilities": {
@@ -196,7 +201,7 @@ pub async fn generate_image(
     let draft = build_txt2img_draft(
         prompt,
         &internal_model,
-        ratio,
+        &aspect,
         negative_prompt,
         None,
         0.5,
@@ -216,7 +221,7 @@ pub async fn generate_image(
         "submit_id": submit_id,
         "metrics_extra": metrics,
         "draft_content": draft,
-        "http_common_info": { "aid": 513695 }
+        "http_common_info": { "aid": APP_ID.parse::<u64>().unwrap() }
     });
 
     let resp = client.post(GENERATE_PATH, &body, &internal_model, false, None).await?;
@@ -232,10 +237,25 @@ pub async fn generate_image(
 // Task status
 // ---------------------------------------------------------------------------
 
+fn parse_task_status(resp: &Value, history_ids: &[String]) -> Result<HashMap<String, TaskStatusResult>, String> {
+    let data = resp.get("data").ok_or("Missing 'data' in task status response")?;
+    let mut results = HashMap::new();
+
+    for hid in history_ids {
+        if let Some(entry) = data.get(hid) {
+            let status: TaskStatusResult = serde_json::from_value(entry.clone())
+                .map_err(|e| format!("Failed to parse task status for {}: {}", hid, e))?;
+            results.insert(hid.clone(), status);
+        }
+    }
+
+    Ok(results)
+}
+
 pub async fn get_task_status(
     client: &JimengClient,
     history_ids: &[String],
-) -> Result<Value, String> {
+) -> Result<HashMap<String, TaskStatusResult>, String> {
     let body = json!({
         "history_ids": history_ids,
         "image_info": {
@@ -244,10 +264,11 @@ pub async fn get_task_status(
             "format": "webp",
             "image_scene_list": []
         },
-        "http_common_info": { "aid": 513695 }
+        "http_common_info": { "aid": APP_ID.parse::<u64>().unwrap() }
     });
 
-    client.post(HISTORY_PATH, &body, "", false, None).await
+    let resp = client.post(HISTORY_PATH, &body, "", false, None).await?;
+    parse_task_status(&resp, history_ids)
 }
 
 // ---------------------------------------------------------------------------
@@ -270,14 +291,14 @@ mod tests {
 
     #[test]
     fn draft_is_valid_json() {
-        let draft = build_txt2img_draft("test prompt", "high_aes_general_v40l", "1:1", "", None, 0.5);
+        let draft = build_txt2img_draft("test prompt", "high_aes_general_v40l", &get_aspect_ratio("1:1"), "", None, 0.5);
         let parsed: Value = serde_json::from_str(&draft).expect("draft should be valid JSON");
         assert_eq!(parsed["type"], "draft");
     }
 
     #[test]
     fn draft_has_required_top_level_fields() {
-        let draft = build_txt2img_draft("hello", "model_v1", "16:9", "", None, 0.5);
+        let draft = build_txt2img_draft("hello", "model_v1", &get_aspect_ratio("16:9"), "", None, 0.5);
         let v: Value = serde_json::from_str(&draft).unwrap();
 
         assert_eq!(v["type"], "draft");
@@ -292,7 +313,7 @@ mod tests {
 
     #[test]
     fn draft_component_structure() {
-        let draft = build_txt2img_draft("cat", "model_v1", "1:1", "ugly", Some(12345), 0.7);
+        let draft = build_txt2img_draft("cat", "model_v1", &get_aspect_ratio("1:1"), "ugly", Some(12345), 0.7);
         let v: Value = serde_json::from_str(&draft).unwrap();
         let comp = &v["component_list"][0];
 
@@ -312,7 +333,7 @@ mod tests {
 
     #[test]
     fn draft_16_9_aspect_ratio() {
-        let draft = build_txt2img_draft("test", "m", "16:9", "", None, 0.5);
+        let draft = build_txt2img_draft("test", "m", &get_aspect_ratio("16:9"), "", None, 0.5);
         let v: Value = serde_json::from_str(&draft).unwrap();
         let core = &v["component_list"][0]["abilities"]["generate"]["core_param"];
 
@@ -325,7 +346,7 @@ mod tests {
 
     #[test]
     fn draft_main_component_id_matches() {
-        let draft = build_txt2img_draft("test", "m", "1:1", "", None, 0.5);
+        let draft = build_txt2img_draft("test", "m", &get_aspect_ratio("1:1"), "", None, 0.5);
         let v: Value = serde_json::from_str(&draft).unwrap();
 
         let main_id = v["main_component_id"].as_str().unwrap();
@@ -335,7 +356,7 @@ mod tests {
 
     #[test]
     fn draft_uuids_are_unique() {
-        let draft = build_txt2img_draft("test", "m", "1:1", "", None, 0.5);
+        let draft = build_txt2img_draft("test", "m", &get_aspect_ratio("1:1"), "", None, 0.5);
         let v: Value = serde_json::from_str(&draft).unwrap();
 
         let draft_id = v["id"].as_str().unwrap();
@@ -506,11 +527,12 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn task_status_result_from_completed_response() {
+    fn task_status_result_from_api_snake_case() {
         let data = json!({
             "status": 50,
-            "failCode": "0",
-            "itemList": [
+            "fail_code": "0",
+            "history_record_id": "12984053829900",
+            "item_list": [
                 { "url": "https://example.com/img1.webp", "width": 2048, "height": 2048 },
                 { "url": "https://example.com/img2.webp", "width": 2048, "height": 2048 }
             ]
@@ -518,6 +540,7 @@ mod tests {
         let result: TaskStatusResult = serde_json::from_value(data).unwrap();
         assert_eq!(result.status, 50);
         assert_eq!(result.fail_code, "0");
+        assert_eq!(result.history_record_id, "12984053829900");
         assert_eq!(result.item_list.len(), 2);
         assert_eq!(result.item_list[0].url, "https://example.com/img1.webp");
         assert_eq!(result.item_list[0].width, 2048);
@@ -527,8 +550,8 @@ mod tests {
     fn task_status_result_queued_empty_items() {
         let data = json!({
             "status": 20,
-            "failCode": "",
-            "itemList": []
+            "fail_code": "",
+            "item_list": []
         });
         let result: TaskStatusResult = serde_json::from_value(data).unwrap();
         assert_eq!(result.status, 20);
@@ -544,6 +567,30 @@ mod tests {
         assert_eq!(item.height, 0);
     }
 
+    #[test]
+    fn parse_task_status_multiple_ids() {
+        let resp = json!({
+            "data": {
+                "111": { "status": 50, "fail_code": "0", "item_list": [{ "url": "a.webp" }], "history_record_id": "111" },
+                "222": { "status": 20, "fail_code": "", "item_list": [], "history_record_id": "222" }
+            }
+        });
+        let ids = vec!["111".to_string(), "222".to_string()];
+        let result = parse_task_status(&resp, &ids).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result["111"].status, 50);
+        assert_eq!(result["111"].item_list.len(), 1);
+        assert_eq!(result["222"].status, 20);
+    }
+
+    #[test]
+    fn parse_task_status_missing_id_skipped() {
+        let resp = json!({ "data": {} });
+        let ids = vec!["999".to_string()];
+        let result = parse_task_status(&resp, &ids).unwrap();
+        assert!(result.is_empty());
+    }
+
     // -----------------------------------------------------------------------
     // draft seed range
     // -----------------------------------------------------------------------
@@ -551,7 +598,7 @@ mod tests {
     #[test]
     fn draft_auto_seed_in_expected_range() {
         for _ in 0..20 {
-            let draft = build_txt2img_draft("test", "m", "1:1", "", None, 0.5);
+            let draft = build_txt2img_draft("test", "m", &get_aspect_ratio("1:1"), "", None, 0.5);
             let v: Value = serde_json::from_str(&draft).unwrap();
             let seed = v["component_list"][0]["abilities"]["generate"]["core_param"]["seed"]
                 .as_u64()
@@ -566,7 +613,7 @@ mod tests {
 
     #[test]
     fn draft_explicit_seed_used() {
-        let draft = build_txt2img_draft("test", "m", "1:1", "", Some(999), 0.5);
+        let draft = build_txt2img_draft("test", "m", &get_aspect_ratio("1:1"), "", Some(999), 0.5);
         let v: Value = serde_json::from_str(&draft).unwrap();
         let seed = v["component_list"][0]["abilities"]["generate"]["core_param"]["seed"]
             .as_u64()

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   JimengGenerateResult,
+  JimengTaskStatusResult,
   JimengCreditInfo,
 } from "./types";
 
@@ -28,8 +29,8 @@ export async function jimengTaskStatus(
   providerName: string,
   profileName: string,
   historyIds: string[],
-): Promise<unknown> {
-  return invoke("jimeng_task_status", {
+): Promise<Record<string, JimengTaskStatusResult>> {
+  return invoke<Record<string, JimengTaskStatusResult>>("jimeng_task_status", {
     providerName,
     profileName,
     historyIds,

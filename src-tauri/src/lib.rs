@@ -1061,7 +1061,7 @@ async fn jimeng_task_status(
     history_ids: Vec<String>,
     token: Option<String>,
     app_handle: tauri::AppHandle,
-) -> Result<serde_json::Value, String> {
+) -> Result<HashMap<String, providers::jimeng::api::TaskStatusResult>, String> {
     let client = build_jimeng_client(&app_handle, &provider_name, &profile_name, token.as_deref()).await?;
     providers::jimeng::api::get_task_status(&client, &history_ids).await
 }

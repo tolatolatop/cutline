@@ -1,15 +1,8 @@
 use md5::{Digest, Md5};
 use rand::Rng;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::constants::{APP_VERSION, PLATFORM_CODE, SIGN_PREFIX, SIGN_SUFFIX};
-
-fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-}
+use super::now_secs;
 
 fn random_digits(len: usize) -> String {
     let mut rng = rand::thread_rng();

@@ -1,4 +1,4 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use rand::Rng;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -6,6 +6,7 @@ use serde_json::Value;
 
 use super::auth::{generate_cookie, generate_sign};
 use super::constants::*;
+use super::now_secs;
 
 pub struct JimengClient {
     base_url: String,
@@ -29,7 +30,6 @@ impl JimengClient {
 
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
-            .danger_accept_invalid_certs(true)
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -41,15 +41,8 @@ impl JimengClient {
         })
     }
 
-    fn now_secs() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    }
-
     pub(crate) fn common_headers(&self, uri: &str) -> HeaderMap {
-        let device_time = Self::now_secs();
+        let device_time = now_secs();
         let sign = generate_sign(uri, device_time);
 
         let pairs: Vec<(&str, String)> = vec![

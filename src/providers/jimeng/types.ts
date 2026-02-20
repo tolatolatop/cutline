@@ -19,6 +19,19 @@ export interface JimengTaskStatusParams {
   historyIds: string[];
 }
 
+export interface JimengTaskStatusResult {
+  status: number;
+  fail_code: string;
+  item_list: JimengTaskItem[];
+  history_record_id: string;
+}
+
+export interface JimengTaskItem {
+  url: string;
+  width: number;
+  height: number;
+}
+
 export interface JimengCreditBalanceParams {
   providerName: string;
   profileName: string;
