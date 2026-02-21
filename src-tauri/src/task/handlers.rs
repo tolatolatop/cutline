@@ -685,7 +685,6 @@ fn build_jimeng_client(
     app_handle: &tauri::AppHandle,
     provider_name: &str,
     profile_name: &str,
-    token_override: Option<&str>,
 ) -> Result<crate::providers::jimeng::client::JimengClient, String> {
     let path = crate::provider::io::providers_path(app_handle)?;
     let file = crate::provider::io::load_providers(&path)?;
@@ -698,11 +697,8 @@ fn build_jimeng_client(
         .get(profile_name)
         .ok_or(format!("profile_not_found: {}", profile_name))?;
 
-    let secret = match token_override {
-        Some(t) => t.to_string(),
-        None => crate::secrets::get_secret(&profile.credential_ref)?
-            .ok_or("missing_credentials".to_string())?,
-    };
+    let secret = crate::secrets::get_secret(&profile.credential_ref)?
+        .ok_or("missing_credentials: 请在设置中连接 Provider".to_string())?;
 
     let timeout_secs = profile.timeout_ms / 1000;
     crate::providers::jimeng::client::JimengClient::new(
@@ -734,7 +730,6 @@ async fn handle_gen_video(
         Some(s) => s.to_string(),
         None => return err_result("missing_input", "Missing prompt"),
     };
-    let token = input.get("token").and_then(|v| v.as_str()).map(|s| s.to_string());
     let model = input.get("model").and_then(|v| v.as_str()).unwrap_or("jimeng-video-3.0");
     let ratio = input.get("ratio").and_then(|v| v.as_str()).unwrap_or("16:9");
     let duration_ms = input.get("durationMs").and_then(|v| v.as_u64()).map(|v| v as u32);
@@ -745,7 +740,7 @@ async fn handle_gen_video(
         "Building client for {}/{}", provider_name, profile_name
     )).await;
 
-    let client = match build_jimeng_client(app_handle, &provider_name, &profile_name, token.as_deref()) {
+    let client = match build_jimeng_client(app_handle, &provider_name, &profile_name) {
         Ok(c) => c,
         Err(e) => {
             append_task_event(state, task_id, "error", &format!("Client build failed: {}", e)).await;

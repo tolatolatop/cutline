@@ -13,6 +13,7 @@ use project::model::{
 };
 use state::{AppState, LoadedProject};
 use std::collections::HashMap;
+use tauri::Manager;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::Emitter;
@@ -998,12 +999,10 @@ async fn providers_test(
 // Jimeng Provider Commands
 // ============================================================
 
-/// Helper: build a JimengClient from provider config + keyring, or a direct token.
 async fn build_jimeng_client(
     app_handle: &tauri::AppHandle,
     provider_name: &str,
     profile_name: &str,
-    token_override: Option<&str>,
 ) -> Result<providers::jimeng::client::JimengClient, String> {
     let path = provider::io::providers_path(app_handle)?;
     let file = provider::io::load_providers(&path)?;
@@ -1016,11 +1015,8 @@ async fn build_jimeng_client(
         .get(profile_name)
         .ok_or(format!("profile_not_found: {}", profile_name))?;
 
-    let secret = match token_override {
-        Some(t) => t.to_string(),
-        None => secrets::get_secret(&profile.credential_ref)?
-            .ok_or("missing_credentials")?,
-    };
+    let secret = secrets::get_secret(&profile.credential_ref)?
+        .ok_or("missing_credentials: 请在设置中连接 Provider")?;
 
     let timeout_secs = profile.timeout_ms / 1000;
     providers::jimeng::client::JimengClient::new(
@@ -1040,10 +1036,9 @@ async fn jimeng_generate_image(
     ratio: Option<String>,
     negative_prompt: Option<String>,
     image_count: Option<u32>,
-    token: Option<String>,
     app_handle: tauri::AppHandle,
 ) -> Result<providers::jimeng::api::GenerateResult, String> {
-    let client = build_jimeng_client(&app_handle, &provider_name, &profile_name, token.as_deref()).await?;
+    let client = build_jimeng_client(&app_handle, &provider_name, &profile_name).await?;
     providers::jimeng::api::generate_image(
         &client,
         &prompt,
@@ -1060,10 +1055,9 @@ async fn jimeng_task_status(
     provider_name: String,
     profile_name: String,
     history_ids: Vec<String>,
-    token: Option<String>,
     app_handle: tauri::AppHandle,
 ) -> Result<HashMap<String, providers::jimeng::api::TaskStatusResult>, String> {
-    let client = build_jimeng_client(&app_handle, &provider_name, &profile_name, token.as_deref()).await?;
+    let client = build_jimeng_client(&app_handle, &provider_name, &profile_name).await?;
     providers::jimeng::api::get_task_status(&client, &history_ids, None).await
 }
 
@@ -1071,10 +1065,9 @@ async fn jimeng_task_status(
 async fn jimeng_credit_balance(
     provider_name: String,
     profile_name: String,
-    token: Option<String>,
     app_handle: tauri::AppHandle,
 ) -> Result<providers::jimeng::api::CreditInfo, String> {
-    let client = build_jimeng_client(&app_handle, &provider_name, &profile_name, token.as_deref()).await?;
+    let client = build_jimeng_client(&app_handle, &provider_name, &profile_name).await?;
     providers::jimeng::api::get_credit(&client).await
 }
 
@@ -1092,7 +1085,6 @@ async fn gen_video_enqueue(
     ratio: Option<String>,
     duration_ms: Option<u32>,
     start_ms: Option<i64>,
-    token: Option<String>,
     state: tauri::State<'_, Arc<AppState>>,
     app_handle: tauri::AppHandle,
 ) -> Result<serde_json::Value, String> {
@@ -1118,9 +1110,6 @@ async fn gen_video_enqueue(
     }
     if let Some(s) = start_ms {
         input["startMs"] = serde_json::json!(s);
-    }
-    if let Some(t) = &token {
-        input["token"] = serde_json::json!(t);
     }
 
     let task = Task {
@@ -1267,6 +1256,11 @@ pub fn run() {
             let handle = app.handle().clone();
             let state_for_runner = app_state.clone();
             let state_for_saver = app_state.clone();
+
+            let config_dir = handle.path()
+                .app_config_dir()
+                .expect("Failed to resolve app config dir");
+            secrets::init(config_dir);
 
             // Spawn debounce saver
             tauri::async_runtime::spawn(async move {

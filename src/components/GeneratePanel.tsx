@@ -27,7 +27,6 @@ export function GeneratePanel() {
   const [durationSec, setDurationSec] = useState(5);
   const [providerName, setProviderName] = useState("jimeng");
   const [profileName, setProfileName] = useState("default");
-  const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ taskId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +53,6 @@ export function GeneratePanel() {
         model,
         ratio,
         durationMs: durationSec * 1000,
-        token: token.trim() || undefined,
       });
       setResult(res);
     } catch (e) {
@@ -198,21 +196,6 @@ export function GeneratePanel() {
               className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[10px] text-zinc-200 focus:outline-none focus:border-blue-500"
             />
           </div>
-        </div>
-
-        {/* Token (fallback for keyring) */}
-        <div>
-          <label className="block text-[10px] text-zinc-500 mb-1">
-            Session Token <span className="text-zinc-600">(keyring 不可用时填写)</span>
-          </label>
-          <input
-            data-testid="gen-token"
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="sessionid..."
-            className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[10px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-blue-500 font-mono"
-          />
         </div>
 
         {/* Generate Button */}

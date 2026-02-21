@@ -147,7 +147,6 @@ export interface GenVideoParams {
   ratio?: string;
   durationMs?: number;
   startMs?: number;
-  token?: string;
 }
 
 export async function genVideoEnqueue(

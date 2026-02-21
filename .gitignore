@@ -28,3 +28,7 @@ tests/test-artifacts
 *.sw?
 
 .temp
+
+# Secrets (file-based fallback for keyring)
+secrets.json
+secrets.json.tmp
