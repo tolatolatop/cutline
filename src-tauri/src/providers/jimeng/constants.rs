@@ -19,6 +19,7 @@ pub const DRAFT_VERSION: &str = "3.0.2";
 pub const VIDEO_DRAFT_VERSION: &str = "3.3.2";
 pub const VIDEO_MIN_VERSION: &str = "3.0.5";
 pub const VIDEO_BENEFIT_TYPE: &str = "basic_video_operation_vgfm_v_three";
+pub const SEEDANCE_BENEFIT_TYPE: &str = "dreamina_seedance_20_fast";
 
 pub const SEEDANCE_DEFAULT_FPS: u32 = 24;
 pub const SEEDANCE_DEFAULT_DURATION_MS: u32 = 5000;

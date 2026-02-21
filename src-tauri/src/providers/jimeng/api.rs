@@ -8,7 +8,7 @@ use super::client::JimengClient;
 use super::constants::{
     get_aspect_ratio, resolve_model, APP_ID, AspectRatio, DRAFT_VERSION,
     SEEDANCE_DEFAULT_FPS, SEEDANCE_DEFAULT_DURATION_MS,
-    VIDEO_DRAFT_VERSION, VIDEO_MIN_VERSION, VIDEO_BENEFIT_TYPE,
+    VIDEO_DRAFT_VERSION, VIDEO_MIN_VERSION, VIDEO_BENEFIT_TYPE, SEEDANCE_BENEFIT_TYPE,
 };
 
 // ---------------------------------------------------------------------------
@@ -395,7 +395,10 @@ pub async fn generate_video(
     let draft = build_text2video_draft(prompt, &internal_model, ratio, duration_ms);
     let metrics_extra = build_video_metrics_extra();
 
-    log::info!("[generate_video] internal_model={}", internal_model);
+    let is_seedance = internal_model.contains("seedance");
+    let benefit_type = if is_seedance { SEEDANCE_BENEFIT_TYPE } else { VIDEO_BENEFIT_TYPE };
+
+    log::info!("[generate_video] internal_model={}, benefit_type={}", internal_model, benefit_type);
     log::info!("[generate_video] draft_content={}", draft);
 
     let submit_id = new_uuid();
@@ -404,13 +407,13 @@ pub async fn generate_video(
         "extend": {
             "root_model": internal_model,
             "m_video_commerce_info": {
-                "benefit_type": VIDEO_BENEFIT_TYPE,
+                "benefit_type": benefit_type,
                 "resource_id": "generate_video",
                 "resource_id_type": "str",
                 "resource_sub_type": "aigc"
             },
             "m_video_commerce_info_list": [{
-                "benefit_type": VIDEO_BENEFIT_TYPE,
+                "benefit_type": benefit_type,
                 "resource_id": "generate_video",
                 "resource_id_type": "str",
                 "resource_sub_type": "aigc"

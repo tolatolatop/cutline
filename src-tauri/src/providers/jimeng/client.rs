@@ -4,6 +4,7 @@ use rand::Rng;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde_json::Value;
 
+use super::a_bogus::{generate_a_bogus, generate_ms_token};
 use super::auth::{generate_cookie, generate_sign};
 use super::constants::*;
 use super::now_secs;
@@ -40,6 +41,8 @@ impl JimengClient {
             http,
         })
     }
+
+    const USER_AGENT: &'static str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
     pub(crate) fn common_headers(&self, uri: &str) -> HeaderMap {
         let device_time = now_secs();
@@ -149,7 +152,18 @@ impl JimengClient {
             }
         }
 
-        let params = self.common_params(model_name, has_ref_image);
+        let mut params = self.common_params(model_name, has_ref_image);
+
+        let ms_token = generate_ms_token(128);
+        params.push(("msToken".into(), ms_token));
+
+        let query_string: String = params
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("&");
+        let a_bogus = generate_a_bogus(&query_string, Self::USER_AGENT);
+        params.push(("a_bogus".into(), a_bogus));
 
         let body_str = body.to_string();
         let body_preview = if body_str.len() > 2000 {
