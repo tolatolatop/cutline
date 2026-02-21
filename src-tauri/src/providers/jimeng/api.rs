@@ -8,6 +8,7 @@ use super::client::JimengClient;
 use super::constants::{
     get_aspect_ratio, resolve_model, APP_ID, AspectRatio, DRAFT_VERSION,
     SEEDANCE_DEFAULT_FPS, SEEDANCE_DEFAULT_DURATION_MS,
+    SEEDANCE_VERSION, SEEDANCE_MIN_FEATURE, SEEDANCE_VIDEO_MODE,
     VIDEO_DRAFT_VERSION, VIDEO_MIN_VERSION, VIDEO_BENEFIT_TYPE, SEEDANCE_BENEFIT_TYPE,
 };
 
@@ -270,6 +271,113 @@ pub(crate) fn build_video_metrics_extra() -> String {
     .to_string()
 }
 
+pub(crate) fn build_seedance_draft(
+    prompt: &str,
+    internal_model: &str,
+    ratio: &str,
+    duration_ms: Option<u32>,
+    video_task_extra: &str,
+) -> String {
+    let dur = duration_ms.unwrap_or(SEEDANCE_DEFAULT_DURATION_MS);
+    let seed: u64 = rand::thread_rng().gen_range(2_500_000_000..2_600_000_000);
+
+    let component_id = new_uuid();
+
+    let meta_list = if prompt.trim().is_empty() {
+        json!([])
+    } else {
+        json!([{ "meta_type": "text", "text": prompt.trim() }])
+    };
+
+    let draft = json!({
+        "type": "draft",
+        "id": new_uuid(),
+        "min_version": SEEDANCE_VERSION,
+        "min_features": [SEEDANCE_MIN_FEATURE],
+        "is_from_tsn": true,
+        "version": SEEDANCE_VERSION,
+        "main_component_id": component_id,
+        "component_list": [{
+            "type": "video_base_component",
+            "id": component_id,
+            "min_version": "1.0.0",
+            "aigc_mode": "workbench",
+            "metadata": {
+                "type": "",
+                "id": new_uuid(),
+                "created_platform": 3,
+                "created_platform_version": "",
+                "created_time_in_ms": now_ms().to_string(),
+                "created_did": ""
+            },
+            "generate_type": "gen_video",
+            "abilities": {
+                "type": "",
+                "id": new_uuid(),
+                "gen_video": {
+                    "type": "",
+                    "id": new_uuid(),
+                    "text_to_video_params": {
+                        "type": "",
+                        "id": new_uuid(),
+                        "video_gen_inputs": [{
+                            "type": "",
+                            "id": new_uuid(),
+                            "min_version": SEEDANCE_VERSION,
+                            "prompt": "",
+                            "video_mode": SEEDANCE_VIDEO_MODE,
+                            "fps": SEEDANCE_DEFAULT_FPS,
+                            "duration_ms": dur,
+                            "idip_meta_list": [],
+                            "unified_edit_input": {
+                                "type": "",
+                                "id": new_uuid(),
+                                "material_list": [],
+                                "meta_list": meta_list
+                            }
+                        }],
+                        "video_aspect_ratio": ratio,
+                        "seed": seed,
+                        "model_req_key": internal_model,
+                        "priority": 0
+                    },
+                    "video_task_extra": video_task_extra
+                }
+            },
+            "process_type": 1
+        }]
+    });
+
+    draft.to_string()
+}
+
+pub(crate) fn build_seedance_metrics_extra(internal_model: &str, duration_ms: u32, submit_id: &str) -> String {
+    let scene_options = json!([{
+        "type": "video",
+        "scene": "BasicVideoGenerateButton",
+        "modelReqKey": internal_model,
+        "videoDuration": duration_ms / 1000,
+        "reportParams": {
+            "enterSource": "generate",
+            "vipSource": "generate",
+            "extraVipFunctionKey": internal_model,
+            "useVipFunctionDetailsReporterHoc": true
+        },
+        "materialTypes": [1]
+    }]);
+
+    json!({
+        "isDefaultSeed": 1,
+        "originSubmitId": submit_id,
+        "isRegenerate": false,
+        "enterFrom": "click",
+        "position": "page_bottom_box",
+        "functionMode": "omni_reference",
+        "sceneOptions": scene_options.to_string()
+    })
+    .to_string()
+}
+
 // ---------------------------------------------------------------------------
 // Response parsing helpers (extracted for testability)
 // ---------------------------------------------------------------------------
@@ -392,16 +500,23 @@ pub async fn generate_video(
     duration_ms: Option<u32>,
 ) -> Result<GenerateResult, String> {
     let internal_model = resolve_model(model);
-    let draft = build_text2video_draft(prompt, &internal_model, ratio, duration_ms);
-    let metrics_extra = build_video_metrics_extra();
-
     let is_seedance = internal_model.contains("seedance");
-    let benefit_type = if is_seedance { SEEDANCE_BENEFIT_TYPE } else { VIDEO_BENEFIT_TYPE };
-
-    log::info!("[generate_video] internal_model={}, benefit_type={}", internal_model, benefit_type);
-    log::info!("[generate_video] draft_content={}", draft);
 
     let submit_id = new_uuid();
+
+    let (draft, metrics_extra, benefit_type) = if is_seedance {
+        let dur = duration_ms.unwrap_or(SEEDANCE_DEFAULT_DURATION_MS);
+        let metrics = build_seedance_metrics_extra(&internal_model, dur, &submit_id);
+        let draft = build_seedance_draft(prompt, &internal_model, ratio, duration_ms, &metrics);
+        (draft, metrics, SEEDANCE_BENEFIT_TYPE)
+    } else {
+        let draft = build_text2video_draft(prompt, &internal_model, ratio, duration_ms);
+        let metrics = build_video_metrics_extra();
+        (draft, metrics, VIDEO_BENEFIT_TYPE)
+    };
+
+    log::info!("[generate_video] internal_model={}, benefit_type={}, seedance={}", internal_model, benefit_type, is_seedance);
+    log::info!("[generate_video] draft_content={}", draft);
 
     let body = json!({
         "extend": {
