@@ -1031,6 +1031,7 @@ async fn build_jimeng_client(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn jimeng_generate_image(
     provider_name: String,
     profile_name: String,
@@ -1063,7 +1064,7 @@ async fn jimeng_task_status(
     app_handle: tauri::AppHandle,
 ) -> Result<HashMap<String, providers::jimeng::api::TaskStatusResult>, String> {
     let client = build_jimeng_client(&app_handle, &provider_name, &profile_name, token.as_deref()).await?;
-    providers::jimeng::api::get_task_status(&client, &history_ids).await
+    providers::jimeng::api::get_task_status(&client, &history_ids, None).await
 }
 
 #[tauri::command]
@@ -1075,6 +1076,135 @@ async fn jimeng_credit_balance(
 ) -> Result<providers::jimeng::api::CreditInfo, String> {
     let client = build_jimeng_client(&app_handle, &provider_name, &profile_name, token.as_deref()).await?;
     providers::jimeng::api::get_credit(&client).await
+}
+
+// ============================================================
+// gen_video / export commands
+// ============================================================
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn gen_video_enqueue(
+    provider_name: String,
+    profile_name: String,
+    prompt: String,
+    model: Option<String>,
+    ratio: Option<String>,
+    duration_ms: Option<u32>,
+    start_ms: Option<i64>,
+    token: Option<String>,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<serde_json::Value, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let task_id = format!(
+        "task_gen_video_{}",
+        &uuid::Uuid::new_v4().to_string().replace("-", "")[..8]
+    );
+
+    let mut input = serde_json::json!({
+        "providerName": provider_name,
+        "profileName": profile_name,
+        "prompt": prompt,
+    });
+    if let Some(m) = &model {
+        input["model"] = serde_json::json!(m);
+    }
+    if let Some(r) = &ratio {
+        input["ratio"] = serde_json::json!(r);
+    }
+    if let Some(d) = duration_ms {
+        input["durationMs"] = serde_json::json!(d);
+    }
+    if let Some(s) = start_ms {
+        input["startMs"] = serde_json::json!(s);
+    }
+    if let Some(t) = &token {
+        input["token"] = serde_json::json!(t);
+    }
+
+    let task = Task {
+        task_id: task_id.clone(),
+        kind: "gen_video".to_string(),
+        state: "queued".to_string(),
+        created_at: now.clone(),
+        updated_at: now.clone(),
+        input,
+        output: None,
+        progress: None,
+        error: None,
+        retries: TaskRetries { count: 0, max: 2 },
+        deps: vec![],
+        events: vec![TaskEvent {
+            t: now,
+            level: "info".to_string(),
+            msg: "gen_video task enqueued".to_string(),
+        }],
+        dedupe_key: None,
+    };
+
+    {
+        let mut guard = state.inner.lock().await;
+        let loaded = guard.as_mut().ok_or("No project loaded")?;
+        loaded.project.tasks.push(task.clone());
+        loaded.project.rebuild_indexes();
+        loaded.dirty = true;
+    }
+
+    state.task_notify.notify_one();
+    let _ = app_handle.emit("task:updated", serde_json::json!({ "task": task }));
+
+    Ok(serde_json::json!({ "taskId": task_id }))
+}
+
+#[tauri::command]
+async fn export_draft(
+    track_id: Option<String>,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<serde_json::Value, String> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let task_id = format!(
+        "task_export_{}",
+        &uuid::Uuid::new_v4().to_string().replace("-", "")[..8]
+    );
+
+    let input = serde_json::json!({
+        "trackId": track_id.unwrap_or_else(|| "trk_draft".to_string()),
+    });
+
+    let task = Task {
+        task_id: task_id.clone(),
+        kind: "export".to_string(),
+        state: "queued".to_string(),
+        created_at: now.clone(),
+        updated_at: now.clone(),
+        input,
+        output: None,
+        progress: None,
+        error: None,
+        retries: TaskRetries { count: 0, max: 1 },
+        deps: vec![],
+        events: vec![TaskEvent {
+            t: now,
+            level: "info".to_string(),
+            msg: "export task enqueued".to_string(),
+        }],
+        dedupe_key: None,
+    };
+
+    {
+        let mut guard = state.inner.lock().await;
+        let loaded = guard.as_mut().ok_or("No project loaded")?;
+        loaded.project.tasks.push(task.clone());
+        loaded.project.rebuild_indexes();
+        loaded.dirty = true;
+    }
+
+    state.task_notify.notify_one();
+    let _ = app_handle.emit("task:updated", serde_json::json!({ "task": task }));
+
+    Ok(serde_json::json!({ "taskId": task_id }))
 }
 
 // ============================================================
@@ -1101,6 +1231,10 @@ fn guess_asset_type(path: &Path) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format_timestamp_millis()
+        .init();
+
     let app_state = AppState::new();
     let state_for_protocol = app_state.clone();
 
@@ -1178,6 +1312,8 @@ pub fn run() {
             jimeng_generate_image,
             jimeng_task_status,
             jimeng_credit_balance,
+            gen_video_enqueue,
+            export_draft,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

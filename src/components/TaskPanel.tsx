@@ -37,7 +37,9 @@ function kindLabel(kind: string): string {
     case "thumb": return "缩略图";
     case "proxy": return "代理视频";
     case "generate": return "AI 生成";
+    case "gen_video": return "视频生成";
     case "export": return "导出";
+    case "capture_frame": return "帧捕获";
     default: return kind;
   }
 }

@@ -26,3 +26,5 @@ tests/test-artifacts
 *.njsproj
 *.sln
 *.sw?
+
+.temp

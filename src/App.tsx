@@ -8,9 +8,10 @@ import { TimelineView } from "./components/TimelineView";
 import { MarkerPanel } from "./components/MarkerPanel";
 import { ClipInfoPanel } from "./components/ClipInfoPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { GeneratePanel } from "./components/GeneratePanel";
 import { useProjectStore, initEventSubscriptions } from "./store/projectStore";
 
-type RightTab = "tasks" | "markers" | "clip" | "detail";
+type RightTab = "tasks" | "markers" | "clip" | "detail" | "generate";
 
 function ProjectInfo() {
   const { projectFile, projectDir } = useProjectStore();
@@ -138,6 +139,7 @@ export default function App() {
           <div className="flex border-b border-zinc-800 bg-zinc-900/50">
             {(
               [
+                { key: "generate", label: "生成" },
                 { key: "tasks", label: "任务" },
                 { key: "markers", label: "标记" },
                 { key: "clip", label: "Clip" },
@@ -161,6 +163,7 @@ export default function App() {
 
           {/* Tab content */}
           <div className="flex-1 overflow-hidden">
+            {rightTab === "generate" && <GeneratePanel />}
             {rightTab === "tasks" && <TaskPanel />}
             {rightTab === "markers" && <MarkerPanel />}
             {rightTab === "clip" && <ClipInfoPanel />}

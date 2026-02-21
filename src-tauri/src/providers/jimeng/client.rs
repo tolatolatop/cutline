@@ -151,6 +151,18 @@ impl JimengClient {
 
         let params = self.common_params(model_name, has_ref_image);
 
+        let body_str = body.to_string();
+        let body_preview = if body_str.len() > 2000 {
+            format!("{}...(truncated, total {} bytes)", &body_str[..2000], body_str.len())
+        } else {
+            body_str.clone()
+        };
+
+        log::info!("[Jimeng] POST {}", path);
+        log::debug!("[Jimeng] URL: {}", url);
+        log::debug!("[Jimeng] Query params: {:?}", params);
+        log::info!("[Jimeng] Body: {}", body_preview);
+
         let resp = self
             .http
             .post(&url)
@@ -159,13 +171,25 @@ impl JimengClient {
             .json(body)
             .send()
             .await
-            .map_err(|e| format!("HTTP request failed: {}", e))?;
+            .map_err(|e| {
+                log::error!("[Jimeng] HTTP request failed: {}", e);
+                format!("HTTP request failed: {}", e)
+            })?;
 
         let status = resp.status();
         let text = resp
             .text()
             .await
             .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+        let resp_preview = if text.len() > 3000 {
+            format!("{}...(truncated, total {} bytes)", &text[..3000], text.len())
+        } else {
+            text.clone()
+        };
+
+        log::info!("[Jimeng] Response status: {}", status);
+        log::info!("[Jimeng] Response body: {}", resp_preview);
 
         if !status.is_success() {
             return Err(format!("HTTP {}: {}", status, text));

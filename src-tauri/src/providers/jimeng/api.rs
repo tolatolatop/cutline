@@ -5,7 +5,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use super::client::JimengClient;
-use super::constants::{get_aspect_ratio, resolve_model, APP_ID, AspectRatio, DRAFT_VERSION};
+use super::constants::{
+    get_aspect_ratio, resolve_model, APP_ID, AspectRatio, DRAFT_VERSION,
+    SEEDANCE_DEFAULT_FPS, SEEDANCE_DEFAULT_DURATION_MS,
+    VIDEO_DRAFT_VERSION, VIDEO_MIN_VERSION, VIDEO_BENEFIT_TYPE,
+};
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -21,10 +25,13 @@ pub struct GenerateResult {
 /// Per-history task status, deserialized from API (snake_case) and serialized to frontend (camelCase).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskStatusResult {
+    #[serde(default)]
     pub status: u32,
-    #[serde(alias = "fail_code")]
+    #[serde(alias = "fail_code", default)]
     pub fail_code: String,
-    #[serde(alias = "item_list")]
+    #[serde(alias = "fail_msg", default)]
+    pub fail_msg: String,
+    #[serde(alias = "item_list", default)]
     pub item_list: Vec<TaskItem>,
     #[serde(alias = "history_record_id", default)]
     pub history_record_id: String,
@@ -38,6 +45,28 @@ pub struct TaskItem {
     pub width: u32,
     #[serde(default)]
     pub height: u32,
+    #[serde(default)]
+    pub video: Option<VideoInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoInfo {
+    #[serde(default, alias = "video_url")]
+    pub video_url: String,
+    #[serde(default, alias = "transcoded_video")]
+    pub transcoded_video: Option<TranscodedVideo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TranscodedVideo {
+    #[serde(default)]
+    pub origin: Option<VideoOrigin>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoOrigin {
+    #[serde(default, alias = "video_url")]
+    pub video_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,6 +178,99 @@ pub(crate) fn build_metrics_extra(
 }
 
 // ---------------------------------------------------------------------------
+// video draft_content builder (gen_video.text_to_video_params format)
+// ---------------------------------------------------------------------------
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
+
+pub(crate) fn build_text2video_draft(
+    prompt: &str,
+    model: &str,
+    ratio: &str,
+    duration_ms: Option<u32>,
+) -> String {
+    let duration_ms = duration_ms.unwrap_or(SEEDANCE_DEFAULT_DURATION_MS);
+    let component_id = new_uuid();
+
+    let metrics_extra = json!({
+        "enterFrom": "click",
+        "isDefaultSeed": 1,
+        "promptSource": "custom",
+        "isRegenerate": false,
+        "originSubmitId": new_uuid(),
+    });
+
+    let draft = json!({
+        "type": "draft",
+        "id": new_uuid(),
+        "min_version": VIDEO_MIN_VERSION,
+        "is_from_tsn": true,
+        "version": VIDEO_DRAFT_VERSION,
+        "main_component_id": component_id,
+        "component_list": [{
+            "type": "video_base_component",
+            "id": component_id,
+            "min_version": "1.0.0",
+            "metadata": {
+                "type": "",
+                "id": new_uuid(),
+                "created_platform": 3,
+                "created_platform_version": "",
+                "created_time_in_ms": now_ms(),
+                "created_did": ""
+            },
+            "generate_type": "gen_video",
+            "aigc_mode": "workbench",
+            "abilities": {
+                "type": "",
+                "id": new_uuid(),
+                "gen_video": {
+                    "id": new_uuid(),
+                    "type": "",
+                    "text_to_video_params": {
+                        "type": "",
+                        "id": new_uuid(),
+                        "model_req_key": model,
+                        "priority": 0,
+                        "seed": random_seed(),
+                        "video_aspect_ratio": ratio,
+                        "video_gen_inputs": [{
+                            "duration_ms": duration_ms,
+                            "fps": SEEDANCE_DEFAULT_FPS,
+                            "id": new_uuid(),
+                            "min_version": VIDEO_MIN_VERSION,
+                            "prompt": prompt,
+                            "resolution": "720p",
+                            "type": "",
+                            "video_mode": 2
+                        }]
+                    },
+                    "video_task_extra": metrics_extra.to_string(),
+                }
+            }
+        }]
+    });
+
+    draft.to_string()
+}
+
+pub(crate) fn build_video_metrics_extra() -> String {
+    json!({
+        "enterFrom": "click",
+        "isDefaultSeed": 1,
+        "promptSource": "custom",
+        "isRegenerate": false,
+        "originSubmitId": new_uuid(),
+    })
+    .to_string()
+}
+
+// ---------------------------------------------------------------------------
 // Response parsing helpers (extracted for testability)
 // ---------------------------------------------------------------------------
 
@@ -160,6 +282,35 @@ fn parse_history_id(resp: &Value) -> String {
             _ => String::new(),
         })
         .unwrap_or_default()
+}
+
+fn parse_submit_id(resp: &Value) -> String {
+    resp.pointer("/data/aigc_data/task/submit_id")
+        .or_else(|| resp.pointer("/data/aigc_data/submit_id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+pub fn extract_video_url(task_result: &TaskStatusResult) -> Option<String> {
+    for item in &task_result.item_list {
+        if let Some(video) = &item.video {
+            if let Some(transcoded) = &video.transcoded_video {
+                if let Some(origin) = &transcoded.origin {
+                    if !origin.video_url.is_empty() {
+                        return Some(origin.video_url.clone());
+                    }
+                }
+            }
+            if !video.video_url.is_empty() {
+                return Some(video.video_url.clone());
+            }
+        }
+        if !item.url.is_empty() {
+            return Some(item.url.clone());
+        }
+    }
+    None
 }
 
 fn parse_credit_response(resp: &Value) -> Result<CreditInfo, String> {
@@ -233,6 +384,59 @@ pub async fn generate_image(
     })
 }
 
+pub async fn generate_video(
+    client: &JimengClient,
+    prompt: &str,
+    model: &str,
+    ratio: &str,
+    duration_ms: Option<u32>,
+) -> Result<GenerateResult, String> {
+    let internal_model = resolve_model(model);
+    let draft = build_text2video_draft(prompt, &internal_model, ratio, duration_ms);
+    let metrics_extra = build_video_metrics_extra();
+
+    log::info!("[generate_video] internal_model={}", internal_model);
+    log::info!("[generate_video] draft_content={}", draft);
+
+    let submit_id = new_uuid();
+
+    let body = json!({
+        "extend": {
+            "root_model": internal_model,
+            "m_video_commerce_info": {
+                "benefit_type": VIDEO_BENEFIT_TYPE,
+                "resource_id": "generate_video",
+                "resource_id_type": "str",
+                "resource_sub_type": "aigc"
+            },
+            "m_video_commerce_info_list": [{
+                "benefit_type": VIDEO_BENEFIT_TYPE,
+                "resource_id": "generate_video",
+                "resource_id_type": "str",
+                "resource_sub_type": "aigc"
+            }]
+        },
+        "submit_id": submit_id,
+        "metrics_extra": metrics_extra,
+        "draft_content": draft,
+        "http_common_info": { "aid": APP_ID.parse::<u64>().unwrap() }
+    });
+
+    let resp = client.post(GENERATE_PATH, &body, &internal_model, false, None).await?;
+
+    log::info!("[generate_video] full response: {}", serde_json::to_string_pretty(&resp).unwrap_or_default());
+
+    let history_id = parse_history_id(&resp);
+    let server_submit_id = parse_submit_id(&resp);
+
+    log::info!("[generate_video] parsed: history_id={}, submit_id={}", history_id, server_submit_id);
+
+    Ok(GenerateResult {
+        history_id,
+        submit_id: if server_submit_id.is_empty() { submit_id } else { server_submit_id },
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Task status
 // ---------------------------------------------------------------------------
@@ -255,8 +459,9 @@ fn parse_task_status(resp: &Value, history_ids: &[String]) -> Result<HashMap<Str
 pub async fn get_task_status(
     client: &JimengClient,
     history_ids: &[String],
+    submit_ids: Option<&[String]>,
 ) -> Result<HashMap<String, TaskStatusResult>, String> {
-    let body = json!({
+    let mut body = json!({
         "history_ids": history_ids,
         "image_info": {
             "width": 2048,
@@ -267,8 +472,18 @@ pub async fn get_task_status(
         "http_common_info": { "aid": APP_ID.parse::<u64>().unwrap() }
     });
 
+    if let Some(sids) = submit_ids {
+        body["submit_ids"] = json!(sids);
+    }
+
     let resp = client.post(HISTORY_PATH, &body, "", false, None).await?;
-    parse_task_status(&resp, history_ids)
+
+    let lookup_ids: Vec<String> = if let Some(sids) = submit_ids {
+        history_ids.iter().chain(sids.iter()).cloned().collect()
+    } else {
+        history_ids.to_vec()
+    };
+    parse_task_status(&resp, &lookup_ids)
 }
 
 // ---------------------------------------------------------------------------
@@ -619,5 +834,191 @@ mod tests {
             .as_u64()
             .unwrap();
         assert_eq!(seed, 999);
+    }
+
+    // -----------------------------------------------------------------------
+    // build_text2video_draft (gen_video.text_to_video_params format)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn video_draft_is_valid_json() {
+        let draft = build_text2video_draft("test video", "model_v1", "16:9", None);
+        let v: Value = serde_json::from_str(&draft).expect("video draft should be valid JSON");
+        assert_eq!(v["type"], "draft");
+        assert_eq!(v["version"], VIDEO_DRAFT_VERSION);
+    }
+
+    #[test]
+    fn video_draft_structure() {
+        let draft = build_text2video_draft("a cat running", "model_v1", "16:9", Some(8000));
+        let v: Value = serde_json::from_str(&draft).unwrap();
+
+        assert_eq!(v["type"], "draft");
+        assert!(v["id"].is_string());
+        assert_eq!(v["version"], VIDEO_DRAFT_VERSION);
+        assert_eq!(v["min_version"], VIDEO_MIN_VERSION);
+        assert!(v["is_from_tsn"].as_bool().unwrap());
+        assert!(v["main_component_id"].is_string());
+
+        let comp = &v["component_list"][0];
+        assert_eq!(comp["type"], "video_base_component");
+        assert!(comp["id"].is_string());
+        assert_eq!(comp["generate_type"], "gen_video");
+        assert_eq!(comp["aigc_mode"], "workbench");
+
+        let t2v = &comp["abilities"]["gen_video"]["text_to_video_params"];
+        assert_eq!(t2v["model_req_key"], "model_v1");
+        assert_eq!(t2v["video_aspect_ratio"], "16:9");
+        assert_eq!(t2v["priority"], 0);
+        assert!(t2v["seed"].is_u64());
+
+        let input = &t2v["video_gen_inputs"][0];
+        assert_eq!(input["prompt"], "a cat running");
+        assert_eq!(input["duration_ms"], 8000);
+        assert_eq!(input["fps"], SEEDANCE_DEFAULT_FPS);
+        assert_eq!(input["resolution"], "720p");
+        assert_eq!(input["video_mode"], 2);
+    }
+
+    #[test]
+    fn video_draft_default_duration() {
+        let draft = build_text2video_draft("test", "m", "1:1", None);
+        let v: Value = serde_json::from_str(&draft).unwrap();
+        let dur = v["component_list"][0]["abilities"]["gen_video"]["text_to_video_params"]["video_gen_inputs"][0]["duration_ms"]
+            .as_u64().unwrap();
+        assert_eq!(dur, SEEDANCE_DEFAULT_DURATION_MS as u64);
+    }
+
+    #[test]
+    fn video_draft_ratio_passed_through() {
+        for ratio in &["16:9", "9:16", "1:1"] {
+            let draft = build_text2video_draft("test", "m", ratio, None);
+            let v: Value = serde_json::from_str(&draft).unwrap();
+            assert_eq!(
+                v["component_list"][0]["abilities"]["gen_video"]["text_to_video_params"]["video_aspect_ratio"].as_str().unwrap(),
+                *ratio,
+            );
+        }
+    }
+
+    #[test]
+    fn video_draft_main_component_id_matches() {
+        let draft = build_text2video_draft("test", "m", "16:9", None);
+        let v: Value = serde_json::from_str(&draft).unwrap();
+        let main_id = v["main_component_id"].as_str().unwrap();
+        let comp_id = v["component_list"][0]["id"].as_str().unwrap();
+        assert_eq!(main_id, comp_id);
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_submit_id
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_submit_id_from_task() {
+        let resp = json!({
+            "data": { "aigc_data": { "task": { "submit_id": "abc-123" } } }
+        });
+        assert_eq!(parse_submit_id(&resp), "abc-123");
+    }
+
+    #[test]
+    fn parse_submit_id_from_aigc_data() {
+        let resp = json!({
+            "data": { "aigc_data": { "submit_id": "xyz-456" } }
+        });
+        assert_eq!(parse_submit_id(&resp), "xyz-456");
+    }
+
+    #[test]
+    fn parse_submit_id_missing() {
+        let resp = json!({ "data": { "aigc_data": {} } });
+        assert_eq!(parse_submit_id(&resp), "");
+    }
+
+    // -----------------------------------------------------------------------
+    // extract_video_url
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn extract_video_url_from_transcoded() {
+        let result = TaskStatusResult {
+            status: 50,
+            fail_code: "0".into(),
+            fail_msg: String::new(),
+            history_record_id: "123".into(),
+            item_list: vec![TaskItem {
+                url: "".into(),
+                width: 1280,
+                height: 720,
+                video: Some(VideoInfo {
+                    video_url: "fallback.mp4".into(),
+                    transcoded_video: Some(TranscodedVideo {
+                        origin: Some(VideoOrigin {
+                            video_url: "https://example.com/transcoded.mp4".into(),
+                        }),
+                    }),
+                }),
+            }],
+        };
+        assert_eq!(
+            extract_video_url(&result),
+            Some("https://example.com/transcoded.mp4".into())
+        );
+    }
+
+    #[test]
+    fn extract_video_url_fallback_to_video_url() {
+        let result = TaskStatusResult {
+            status: 50,
+            fail_code: "0".into(),
+            fail_msg: String::new(),
+            history_record_id: "123".into(),
+            item_list: vec![TaskItem {
+                url: "".into(),
+                width: 0,
+                height: 0,
+                video: Some(VideoInfo {
+                    video_url: "https://example.com/direct.mp4".into(),
+                    transcoded_video: None,
+                }),
+            }],
+        };
+        assert_eq!(
+            extract_video_url(&result),
+            Some("https://example.com/direct.mp4".into())
+        );
+    }
+
+    #[test]
+    fn extract_video_url_fallback_to_item_url() {
+        let result = TaskStatusResult {
+            status: 50,
+            fail_code: "0".into(),
+            fail_msg: String::new(),
+            history_record_id: "123".into(),
+            item_list: vec![TaskItem {
+                url: "https://example.com/item.mp4".into(),
+                width: 0,
+                height: 0,
+                video: None,
+            }],
+        };
+        assert_eq!(
+            extract_video_url(&result),
+            Some("https://example.com/item.mp4".into())
+        );
+    }
+
+    #[test]
+    fn extract_video_url_empty_items() {
+        let result = TaskStatusResult {
+            status: 50,
+            fail_code: "0".into(),
+            fail_msg: String::new(),
+            history_record_id: "123".into(),
+            item_list: vec![],
+        };
+        assert_eq!(extract_video_url(&result), None);
     }
 }

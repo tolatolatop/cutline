@@ -16,6 +16,12 @@ pub const SIGN_SUFFIX: &str = "11ac";
 pub const BASE_URL: &str = "https://jimeng.jianying.com";
 
 pub const DRAFT_VERSION: &str = "3.0.2";
+pub const VIDEO_DRAFT_VERSION: &str = "3.3.2";
+pub const VIDEO_MIN_VERSION: &str = "3.0.5";
+pub const VIDEO_BENEFIT_TYPE: &str = "basic_video_operation_vgfm_v_three";
+
+pub const SEEDANCE_DEFAULT_FPS: u32 = 24;
+pub const SEEDANCE_DEFAULT_DURATION_MS: u32 = 5000;
 
 // ---------------------------------------------------------------------------
 // 图片模型映射: 用户友好名 -> 内部 req_key

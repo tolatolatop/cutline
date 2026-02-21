@@ -82,7 +82,6 @@ async fn mark_running(state: &Arc<AppState>, task_id: &str, app_handle: &tauri::
             let snapshot = task.clone();
             drop(guard);
             let _ = app_handle.emit("task:updated", serde_json::json!({ "task": snapshot }));
-            return;
         }
     }
 }

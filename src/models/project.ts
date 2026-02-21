@@ -119,7 +119,7 @@ export interface GenerationInfo {
 }
 
 // --- 任务 v1 ---
-export type TaskKind = "probe" | "thumb" | "proxy" | "generate" | "export" | "capture_frame";
+export type TaskKind = "probe" | "thumb" | "proxy" | "generate" | "export" | "capture_frame" | "gen_video";
 export type TaskState = "queued" | "running" | "succeeded" | "failed" | "canceled";
 
 export interface TaskProgress {

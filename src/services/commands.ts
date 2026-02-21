@@ -134,3 +134,30 @@ export async function updateGenerationSettings(
 ): Promise<void> {
   return invoke("update_generation_settings", { videoProvider, videoProfile });
 }
+
+// ============================================================
+// Generation / Export Commands
+// ============================================================
+
+export interface GenVideoParams {
+  providerName: string;
+  profileName: string;
+  prompt: string;
+  model?: string;
+  ratio?: string;
+  durationMs?: number;
+  startMs?: number;
+  token?: string;
+}
+
+export async function genVideoEnqueue(
+  params: GenVideoParams
+): Promise<{ taskId: string }> {
+  return invoke("gen_video_enqueue", { ...params });
+}
+
+export async function exportDraft(
+  trackId?: string
+): Promise<{ taskId: string }> {
+  return invoke("export_draft", { trackId });
+}
