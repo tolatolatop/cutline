@@ -35,12 +35,16 @@ function TimeRuler({
   totalMs,
   zoomLevel,
   scrollLeftMs,
-  onSeek,
+  rangeStartMs,
+  rangeEndMs,
+  onRulerClick,
 }: {
   totalMs: number;
   zoomLevel: number;
   scrollLeftMs: number;
-  onSeek: (ms: number) => void;
+  rangeStartMs: number | null;
+  rangeEndMs: number | null;
+  onRulerClick: (ms: number) => void;
 }) {
   const totalWidth = msToPixels(Math.max(totalMs + 5000, 10000), zoomLevel);
   const tickInterval = zoomLevel >= 150 ? 1000 : zoomLevel >= 75 ? 2000 : 5000;
@@ -53,8 +57,12 @@ function TimeRuler({
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const ms = pixelsToMs(x, zoomLevel) + scrollLeftMs;
-    onSeek(Math.max(0, Math.round(ms)));
+    onRulerClick(Math.max(0, Math.round(ms)));
   };
+
+  const hasRange = rangeStartMs !== null && rangeEndMs !== null;
+  const rangeLo = hasRange ? Math.min(rangeStartMs, rangeEndMs) : 0;
+  const rangeHi = hasRange ? Math.max(rangeStartMs, rangeEndMs) : 0;
 
   return (
     <div
@@ -62,6 +70,17 @@ function TimeRuler({
       style={{ height: RULER_HEIGHT, width: totalWidth }}
       onClick={handleClick}
     >
+      {/* Range highlight on ruler */}
+      {hasRange && (
+        <div
+          className="absolute top-0 bottom-0 bg-blue-500/25 pointer-events-none"
+          style={{
+            left: msToPixels(rangeLo, zoomLevel),
+            width: msToPixels(rangeHi - rangeLo, zoomLevel),
+          }}
+        />
+      )}
+
       {ticks.map((t) => {
         const x = msToPixels(t, zoomLevel);
         return (
@@ -73,6 +92,32 @@ function TimeRuler({
           </div>
         );
       })}
+
+      {/* Range start marker */}
+      {rangeStartMs !== null && (
+        <div
+          className="absolute top-0 bottom-0 w-px bg-blue-400 pointer-events-none z-10"
+          style={{ left: msToPixels(rangeStartMs, zoomLevel) }}
+        >
+          <div
+            className="absolute top-0 -translate-x-1/2 w-2 h-2 bg-blue-400"
+            style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}
+          />
+        </div>
+      )}
+
+      {/* Range end marker */}
+      {rangeEndMs !== null && (
+        <div
+          className="absolute top-0 bottom-0 w-px bg-blue-400 pointer-events-none z-10"
+          style={{ left: msToPixels(rangeEndMs, zoomLevel) }}
+        >
+          <div
+            className="absolute top-0 -translate-x-1/2 w-2 h-2 bg-blue-400"
+            style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -418,6 +463,8 @@ export function TimelineView() {
     zoomLevel,
     scrollLeftMs,
     selectedClipIds,
+    rangeStartMs,
+    rangeEndMs,
     setPlayhead,
     setZoom,
     selectClip,
@@ -425,6 +472,9 @@ export function TimelineView() {
     selectRange,
     addClips,
     clearSelection,
+    setRangeStart,
+    setRangeEnd,
+    clearRange,
   } = useTimelineViewStore();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -435,6 +485,7 @@ export function TimelineView() {
   const timeline = projectFile?.timeline;
   const totalMs = timeline?.durationMs ?? 0;
   const selCount = selectedClipIds.size;
+  const hasRange = rangeStartMs !== null && rangeEndMs !== null;
 
   const snapTargets = useMemo(() => {
     if (!timeline) return [];
@@ -450,6 +501,20 @@ export function TimelineView() {
   }, [timeline]);
 
   const totalWidth = msToPixels(Math.max(totalMs + 5000, 10000), zoomLevel);
+
+  // --- Ruler click: first click sets range start, second sets range end ---
+  const handleRulerClick = useCallback(
+    (ms: number) => {
+      if (rangeStartMs === null || rangeEndMs !== null) {
+        setRangeStart(ms);
+      } else {
+        if (timeline) {
+          setRangeEnd(ms, timeline.clips);
+        }
+      }
+    },
+    [rangeStartMs, rangeEndMs, setRangeStart, setRangeEnd, timeline]
+  );
 
   // --- Clip click handler with Ctrl support ---
   const handleClipSelect = useCallback(
@@ -594,12 +659,12 @@ export function TimelineView() {
         useTimelineViewStore.getState().selectClips(allIds);
       }
       if (e.key === "Escape") {
-        clearSelection();
+        clearRange();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selCount, handleDeleteSelected, clearSelection, timeline]);
+  }, [selCount, handleDeleteSelected, clearRange, timeline]);
 
   if (!projectFile) {
     return (
@@ -638,6 +703,22 @@ export function TimelineView() {
           <span className="text-[10px] text-zinc-400">
             已选 {selCount} 个片段
           </span>
+        )}
+
+        {hasRange && (
+          <span className="text-[10px] text-blue-400 font-mono">
+            {formatMs(Math.min(rangeStartMs!, rangeEndMs!))} - {formatMs(Math.max(rangeStartMs!, rangeEndMs!))}
+          </span>
+        )}
+
+        {(hasRange || rangeStartMs !== null) && (
+          <button
+            data-testid="btn-clear-range"
+            onClick={clearRange}
+            className="px-2 py-0.5 text-[10px] bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-300"
+          >
+            清除范围
+          </button>
         )}
 
         <div className="ml-auto flex items-center gap-1">
@@ -680,7 +761,9 @@ export function TimelineView() {
             totalMs={totalMs}
             zoomLevel={zoomLevel}
             scrollLeftMs={scrollLeftMs}
-            onSeek={setPlayhead}
+            rangeStartMs={rangeStartMs}
+            rangeEndMs={rangeEndMs}
+            onRulerClick={handleRulerClick}
           />
 
           {/* Tracks */}
@@ -717,6 +800,26 @@ export function TimelineView() {
                 onSelectClip={handleClipSelect}
               />
             ))}
+
+            {/* Time range highlight overlay */}
+            {hasRange && (() => {
+              const lo = Math.min(rangeStartMs!, rangeEndMs!);
+              const hi = Math.max(rangeStartMs!, rangeEndMs!);
+              const leftPx = msToPixels(lo, zoomLevel);
+              const widthPx = msToPixels(hi - lo, zoomLevel);
+              return (
+                <div
+                  data-testid="range-highlight"
+                  className="absolute bg-blue-500/20 pointer-events-none z-[5]"
+                  style={{
+                    left: 96 + leftPx,
+                    top: 0,
+                    width: widthPx,
+                    bottom: 0,
+                  }}
+                />
+              );
+            })()}
 
             {/* Marquee overlay */}
             {marquee && marquee.w > 2 && (

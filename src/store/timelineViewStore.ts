@@ -7,6 +7,8 @@ interface TimelineViewState {
   zoomLevel: number; // px per second (50, 100, 200)
   scrollLeftMs: number;
   selectedClipIds: Set<string>;
+  rangeStartMs: number | null;
+  rangeEndMs: number | null;
 
   setPlayhead: (ms: number) => void;
   play: () => void;
@@ -20,6 +22,9 @@ interface TimelineViewState {
   addClips: (clipIds: string[]) => void;
   selectRange: (startMs: number, endMs: number, clips: Record<string, Clip>) => void;
   clearSelection: () => void;
+  setRangeStart: (ms: number) => void;
+  setRangeEnd: (ms: number, clips: Record<string, Clip>) => void;
+  clearRange: () => void;
 }
 
 export const ZOOM_LEVELS = [50, 100, 200] as const;
@@ -30,6 +35,8 @@ export const useTimelineViewStore = create<TimelineViewState>((set) => ({
   zoomLevel: 100,
   scrollLeftMs: 0,
   selectedClipIds: new Set(),
+  rangeStartMs: null,
+  rangeEndMs: null,
 
   setPlayhead: (ms) => set({ playheadMs: Math.max(0, Math.round(ms)) }),
   play: () => set({ isPlaying: true }),
@@ -75,6 +82,35 @@ export const useTimelineViewStore = create<TimelineViewState>((set) => ({
   },
 
   clearSelection: () => set({ selectedClipIds: new Set() }),
+
+  setRangeStart: (ms) =>
+    set({
+      rangeStartMs: Math.max(0, Math.round(ms)),
+      rangeEndMs: null,
+      selectedClipIds: new Set(),
+      playheadMs: Math.max(0, Math.round(ms)),
+    }),
+
+  setRangeEnd: (ms, clips) => {
+    const endMs = Math.max(0, Math.round(ms));
+    const lo = Math.min(useTimelineViewStore.getState().rangeStartMs ?? 0, endMs);
+    const hi = Math.max(useTimelineViewStore.getState().rangeStartMs ?? 0, endMs);
+    const ids: string[] = [];
+    for (const [cid, clip] of Object.entries(clips)) {
+      const clipEnd = clip.startMs + clip.durationMs;
+      if (clip.startMs < hi && clipEnd > lo) {
+        ids.push(cid);
+      }
+    }
+    set({ rangeEndMs: endMs, selectedClipIds: new Set(ids) });
+  },
+
+  clearRange: () =>
+    set({
+      rangeStartMs: null,
+      rangeEndMs: null,
+      selectedClipIds: new Set(),
+    }),
 }));
 
 export function msToPixels(ms: number, zoomLevel: number): number {

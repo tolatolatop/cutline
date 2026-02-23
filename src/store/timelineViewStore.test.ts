@@ -303,3 +303,123 @@ describe("multi-select workflow", () => {
     expect(store().selectedClipIds.size).toBe(0);
   });
 });
+
+// ============================================================
+// Range selection (ruler-based time range)
+// ============================================================
+
+describe("setRangeStart", () => {
+  it("sets rangeStartMs and clears rangeEndMs", () => {
+    store().setRangeStart(2000);
+    expect(store().rangeStartMs).toBe(2000);
+    expect(store().rangeEndMs).toBeNull();
+  });
+
+  it("moves playhead to range start", () => {
+    store().setRangeStart(3500);
+    expect(store().playheadMs).toBe(3500);
+  });
+
+  it("clears previous clip selection", () => {
+    store().selectClips(["c1", "c2"]);
+    store().setRangeStart(1000);
+    expect(store().selectedClipIds.size).toBe(0);
+  });
+
+  it("consecutive calls reset the range", () => {
+    store().setRangeStart(1000);
+    store().setRangeStart(5000);
+    expect(store().rangeStartMs).toBe(5000);
+    expect(store().rangeEndMs).toBeNull();
+  });
+
+  it("clamps negative values to zero", () => {
+    store().setRangeStart(-500);
+    expect(store().rangeStartMs).toBe(0);
+  });
+
+  it("rounds fractional ms", () => {
+    store().setRangeStart(1234.7);
+    expect(store().rangeStartMs).toBe(1235);
+  });
+});
+
+describe("setRangeEnd", () => {
+  const clips = makeClipsMap([
+    makeClip("v1", 0, 5000, "trk_v"),
+    makeClip("v2", 5000, 3000, "trk_v"),
+    makeClip("a1", 1000, 4000, "trk_a"),
+    makeClip("t1", 6000, 2000, "trk_t"),
+  ]);
+
+  it("sets rangeEndMs and selects clips in range", () => {
+    store().setRangeStart(500);
+    store().setRangeEnd(4500, clips);
+    expect(store().rangeEndMs).toBe(4500);
+    expect(store().selectedClipIds.has("v1")).toBe(true);
+    expect(store().selectedClipIds.has("a1")).toBe(true);
+    expect(store().selectedClipIds.has("v2")).toBe(false);
+  });
+
+  it("handles reversed range (end < start)", () => {
+    store().setRangeStart(8000);
+    store().setRangeEnd(500, clips);
+    expect(store().rangeEndMs).toBe(500);
+    expect(store().selectedClipIds.has("v1")).toBe(true);
+    expect(store().selectedClipIds.has("v2")).toBe(true);
+    expect(store().selectedClipIds.has("a1")).toBe(true);
+    expect(store().selectedClipIds.has("t1")).toBe(true);
+  });
+
+  it("selects across all track types", () => {
+    store().setRangeStart(0);
+    store().setRangeEnd(9000, clips);
+    expect(store().selectedClipIds.size).toBe(4);
+  });
+
+  it("empty range selects nothing", () => {
+    store().setRangeStart(8500);
+    store().setRangeEnd(9500, clips);
+    expect(store().selectedClipIds.size).toBe(0);
+  });
+
+  it("rounds fractional ms", () => {
+    store().setRangeStart(0);
+    store().setRangeEnd(4999.6, clips);
+    expect(store().rangeEndMs).toBe(5000);
+  });
+});
+
+describe("clearRange", () => {
+  it("clears rangeStartMs, rangeEndMs and clip selection", () => {
+    store().setRangeStart(1000);
+    store().setRangeEnd(5000, makeClipsMap([makeClip("c1", 2000, 1000)]));
+    store().clearRange();
+    expect(store().rangeStartMs).toBeNull();
+    expect(store().rangeEndMs).toBeNull();
+    expect(store().selectedClipIds.size).toBe(0);
+  });
+
+  it("is idempotent on empty state", () => {
+    store().clearRange();
+    expect(store().rangeStartMs).toBeNull();
+    expect(store().rangeEndMs).toBeNull();
+  });
+});
+
+describe("range + manual selection interaction", () => {
+  const clips = makeClipsMap([
+    makeClip("v1", 0, 5000, "trk_v"),
+    makeClip("v2", 6000, 2000, "trk_v"),
+  ]);
+
+  it("setting range start after having a complete range resets", () => {
+    store().setRangeStart(0);
+    store().setRangeEnd(9000, clips);
+    expect(store().selectedClipIds.size).toBe(2);
+
+    store().setRangeStart(3000);
+    expect(store().rangeEndMs).toBeNull();
+    expect(store().selectedClipIds.size).toBe(0);
+  });
+});
