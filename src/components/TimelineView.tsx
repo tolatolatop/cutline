@@ -699,16 +699,33 @@ export function TimelineView() {
           </button>
         )}
 
-        {selCount > 1 && (
-          <span className="text-[10px] text-zinc-400">
-            已选 {selCount} 个片段
-          </span>
-        )}
-
-        {hasRange && (
-          <span className="text-[10px] text-blue-400 font-mono">
-            {formatMs(Math.min(rangeStartMs!, rangeEndMs!))} - {formatMs(Math.max(rangeStartMs!, rangeEndMs!))}
-          </span>
+        {(hasRange || selCount > 0) && (
+          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-zinc-800/60 rounded text-[10px]">
+            {hasRange && (() => {
+              const lo = Math.min(rangeStartMs!, rangeEndMs!);
+              const hi = Math.max(rangeStartMs!, rangeEndMs!);
+              const durationSec = ((hi - lo) / 1000).toFixed(2);
+              return (
+                <>
+                  <span className="text-blue-400 font-mono">
+                    {formatMs(lo)} - {formatMs(hi)}
+                  </span>
+                  <span className="text-zinc-500">|</span>
+                  <span className="text-blue-300">
+                    时长 {durationSec}s
+                  </span>
+                </>
+              );
+            })()}
+            {selCount > 0 && (
+              <>
+                {hasRange && <span className="text-zinc-500">|</span>}
+                <span className="text-zinc-300">
+                  {selCount} 个片段
+                </span>
+              </>
+            )}
+          </div>
         )}
 
         {(hasRange || rangeStartMs !== null) && (
