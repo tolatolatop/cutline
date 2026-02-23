@@ -1,4 +1,4 @@
-import { useRef, useMemo, useCallback, useEffect } from "react";
+import { useRef, useState, useMemo, useCallback, useEffect } from "react";
 import { useProjectStore } from "../store/projectStore";
 import {
   useTimelineViewStore,
@@ -94,7 +94,7 @@ function ClipBlock({
   zoomLevel: number;
   selected: boolean;
   snapTargets: number[];
-  onSelect: () => void;
+  onSelect: (e: React.PointerEvent) => void;
 }) {
   const leftPx = msToPixels(clip.startMs, zoomLevel);
   const widthPx = msToPixels(clip.durationMs, zoomLevel);
@@ -129,7 +129,7 @@ function ClipBlock({
     (e: React.PointerEvent, mode: "move" | "trim-left" | "trim-right") => {
       e.stopPropagation();
       e.preventDefault();
-      onSelect();
+      onSelect(e);
 
       dragState.current = {
         mode,
@@ -298,7 +298,7 @@ function TrackLane({
   clips,
   assets,
   zoomLevel,
-  selectedClipId,
+  selectedClipIds,
   snapTargets,
   onSelectClip,
 }: {
@@ -307,9 +307,9 @@ function TrackLane({
   clips: Record<string, Clip>;
   assets: Asset[];
   zoomLevel: number;
-  selectedClipId: string | null;
+  selectedClipIds: Set<string>;
   snapTargets: number[];
-  onSelectClip: (id: string) => void;
+  onSelectClip: (id: string, e: React.PointerEvent) => void;
 }) {
   const assetMap = useMemo(() => {
     const m = new Map<string, Asset>();
@@ -332,9 +332,9 @@ function TrackLane({
               clip={clip}
               asset={assetMap.get(clip.assetId)}
               zoomLevel={zoomLevel}
-              selected={selectedClipId === cid}
+              selected={selectedClipIds.has(cid)}
               snapTargets={snapTargets}
-              onSelect={() => onSelectClip(cid)}
+              onSelect={(e) => onSelectClip(cid, e)}
             />
           );
         })}
@@ -397,6 +397,17 @@ function MarkerFlag({
 }
 
 // ============================================================
+// Marquee overlay for range selection
+// ============================================================
+
+interface MarqueeRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+// ============================================================
 // Main TimelineView
 // ============================================================
 
@@ -406,16 +417,24 @@ export function TimelineView() {
     playheadMs,
     zoomLevel,
     scrollLeftMs,
-    selectedClipId,
+    selectedClipIds,
     setPlayhead,
     setZoom,
     selectClip,
+    toggleClip,
+    selectRange,
+    addClips,
+    clearSelection,
   } = useTimelineViewStore();
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const tracksAreaRef = useRef<HTMLDivElement>(null);
+  const [marquee, setMarquee] = useState<MarqueeRect | null>(null);
+  const marqueeOrigin = useRef<{ x: number; y: number; scrollLeft: number } | null>(null);
 
   const timeline = projectFile?.timeline;
   const totalMs = timeline?.durationMs ?? 0;
+  const selCount = selectedClipIds.size;
 
   const snapTargets = useMemo(() => {
     if (!timeline) return [];
@@ -431,6 +450,102 @@ export function TimelineView() {
   }, [timeline]);
 
   const totalWidth = msToPixels(Math.max(totalMs + 5000, 10000), zoomLevel);
+
+  // --- Clip click handler with Ctrl support ---
+  const handleClipSelect = useCallback(
+    (clipId: string, e: React.PointerEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        toggleClip(clipId);
+      } else {
+        selectClip(clipId);
+      }
+    },
+    [toggleClip, selectClip]
+  );
+
+  // --- Marquee range selection on track area background ---
+  const handleTrackAreaPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("[data-testid^='clip-block-']")) return;
+
+      const area = tracksAreaRef.current;
+      if (!area) return;
+
+      const rect = area.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const scrollLeft = scrollRef.current?.scrollLeft ?? 0;
+
+      marqueeOrigin.current = { x: x + scrollLeft, y, scrollLeft };
+
+      if (!e.ctrlKey && !e.metaKey) {
+        clearSelection();
+      }
+
+      const onMove = (ev: PointerEvent) => {
+        if (!marqueeOrigin.current || !area) return;
+        const areaRect = area.getBoundingClientRect();
+        const curX = ev.clientX - areaRect.left + (scrollRef.current?.scrollLeft ?? 0);
+        const curY = ev.clientY - areaRect.top;
+        const ox = marqueeOrigin.current.x;
+        const oy = marqueeOrigin.current.y;
+        setMarquee({
+          x: Math.min(ox, curX),
+          y: Math.min(oy, curY),
+          w: Math.abs(curX - ox),
+          h: Math.abs(curY - oy),
+        });
+      };
+
+      const onUp = (ev: PointerEvent) => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        setMarquee(null);
+
+        if (!marqueeOrigin.current || !timeline) {
+          marqueeOrigin.current = null;
+          return;
+        }
+
+        const areaRect = area.getBoundingClientRect();
+        const curX = ev.clientX - areaRect.left + (scrollRef.current?.scrollLeft ?? 0);
+        const ox = marqueeOrigin.current.x;
+
+        const trackLabelWidth = 96; // w-24 = 6rem = 96px
+        const startPx = Math.min(ox, curX) - trackLabelWidth;
+        const endPx = Math.max(ox, curX) - trackLabelWidth;
+
+        if (endPx - startPx < 4) {
+          marqueeOrigin.current = null;
+          return;
+        }
+
+        const startMs = pixelsToMs(Math.max(0, startPx), zoomLevel);
+        const endMs = pixelsToMs(endPx, zoomLevel);
+
+        if (ev.ctrlKey || ev.metaKey) {
+          const lo = Math.min(startMs, endMs);
+          const hi = Math.max(startMs, endMs);
+          const ids: string[] = [];
+          for (const [cid, clip] of Object.entries(timeline.clips)) {
+            const clipEnd = clip.startMs + clip.durationMs;
+            if (clip.startMs < hi && clipEnd > lo) {
+              ids.push(cid);
+            }
+          }
+          addClips(ids);
+        } else {
+          selectRange(startMs, endMs, timeline.clips);
+        }
+        marqueeOrigin.current = null;
+      };
+
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+    },
+    [timeline, zoomLevel, clearSelection, selectRange, addClips]
+  );
 
   const handleAddClip = useCallback(async () => {
     if (!projectFile || !selectedAssetId) return;
@@ -448,29 +563,43 @@ export function TimelineView() {
     } catch (err) {
       console.error("Failed to add clip:", err);
     }
-  }, [projectFile, selectedAssetId]);
+  }, [projectFile, selectedAssetId, playheadMs]);
 
-  const handleDeleteClip = useCallback(async () => {
-    if (!selectedClipId) return;
-    try {
-      await commands.timelineRemoveClip(selectedClipId);
-      selectClip(null);
-    } catch (err) {
-      console.error("Failed to remove clip:", err);
+  const handleDeleteSelected = useCallback(async () => {
+    if (selCount === 0) return;
+    const ids = Array.from(selectedClipIds);
+    clearSelection();
+    for (const id of ids) {
+      try {
+        await commands.timelineRemoveClip(id);
+      } catch (err) {
+        console.error("Failed to remove clip:", err);
+      }
     }
-  }, [selectedClipId, selectClip]);
+  }, [selectedClipIds, selCount, clearSelection]);
 
+  // Keyboard shortcuts: Delete/Backspace, Ctrl+A, Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (document.activeElement !== document.body) return;
+
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedClipId && document.activeElement === document.body) {
-          handleDeleteClip();
+        if (selCount > 0) {
+          handleDeleteSelected();
         }
+      }
+      if (e.key === "a" && (e.ctrlKey || e.metaKey) && timeline) {
+        e.preventDefault();
+        const allIds = Object.keys(timeline.clips);
+        useTimelineViewStore.getState().selectClips(allIds);
+      }
+      if (e.key === "Escape") {
+        clearSelection();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedClipId, handleDeleteClip]);
+  }, [selCount, handleDeleteSelected, clearSelection, timeline]);
 
   if (!projectFile) {
     return (
@@ -495,14 +624,20 @@ export function TimelineView() {
           + 添加到时间轴
         </button>
 
-        {selectedClipId && (
+        {selCount > 0 && (
           <button
             data-testid="btn-delete-clip"
-            onClick={handleDeleteClip}
+            onClick={handleDeleteSelected}
             className="px-2 py-0.5 text-[10px] bg-red-600/80 hover:bg-red-500 rounded text-white"
           >
-            删除 Clip
+            删除{selCount > 1 ? ` (${selCount})` : ""}
           </button>
+        )}
+
+        {selCount > 1 && (
+          <span className="text-[10px] text-zinc-400">
+            已选 {selCount} 个片段
+          </span>
         )}
 
         <div className="ml-auto flex items-center gap-1">
@@ -549,7 +684,12 @@ export function TimelineView() {
           />
 
           {/* Tracks */}
-          <div className="relative" style={{ marginLeft: 0 }}>
+          <div
+            ref={tracksAreaRef}
+            className="relative select-none"
+            style={{ marginLeft: 0 }}
+            onPointerDown={handleTrackAreaPointerDown}
+          >
             {/* Playhead */}
             <div className="absolute top-0 bottom-0 left-24" style={{ width: totalWidth }}>
               <PlayheadLine playheadMs={playheadMs} zoomLevel={zoomLevel} />
@@ -572,11 +712,24 @@ export function TimelineView() {
                 clips={timeline.clips}
                 assets={projectFile.assets}
                 zoomLevel={zoomLevel}
-                selectedClipId={selectedClipId}
+                selectedClipIds={selectedClipIds}
                 snapTargets={snapTargets}
-                onSelectClip={selectClip}
+                onSelectClip={handleClipSelect}
               />
             ))}
+
+            {/* Marquee overlay */}
+            {marquee && marquee.w > 2 && (
+              <div
+                className="absolute border border-blue-400 bg-blue-500/15 pointer-events-none z-30"
+                style={{
+                  left: marquee.x,
+                  top: marquee.y,
+                  width: marquee.w,
+                  height: marquee.h,
+                }}
+              />
+            )}
           </div>
         </div>
       </div>

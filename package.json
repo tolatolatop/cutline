@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:pw": "playwright test --config tests/e2e-playwright/playwright.config.ts",
     "test:wdio": "wdio run tests/e2e-wdio/wdio.conf.ts",
     "test:all": "pnpm test:pw && pnpm test:wdio",
@@ -40,6 +42,7 @@
     "ts-node": "^10.9.2",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
+    "vitest": "^4.0.18",
     "webdriverio": "^9.24.0"
   }
 }

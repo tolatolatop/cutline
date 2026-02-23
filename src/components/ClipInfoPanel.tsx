@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useProjectStore } from "../store/projectStore";
 import { useTimelineViewStore, formatMs } from "../store/timelineViewStore";
 import * as commands from "../services/commands";
@@ -10,13 +10,16 @@ function fileName(path: string) {
 
 export function ClipInfoPanel() {
   const { projectFile } = useProjectStore();
-  const { selectedClipId } = useTimelineViewStore();
+  const { selectedClipIds } = useTimelineViewStore();
   const [editStartMs, setEditStartMs] = useState("");
   const [editInMs, setEditInMs] = useState("");
   const [editOutMs, setEditOutMs] = useState("");
 
-  const clip: Clip | undefined = selectedClipId
-    ? projectFile?.timeline?.clips?.[selectedClipId]
+  const selectedArray = useMemo(() => Array.from(selectedClipIds), [selectedClipIds]);
+  const singleId = selectedArray.length === 1 ? selectedArray[0] : null;
+
+  const clip: Clip | undefined = singleId
+    ? projectFile?.timeline?.clips?.[singleId]
     : undefined;
 
   const asset = clip
@@ -50,6 +53,16 @@ export function ClipInfoPanel() {
   }, [clip, editStartMs, editInMs, editOutMs]);
 
   if (!clip) {
+    if (selectedArray.length > 1) {
+      return (
+        <div className="px-3 py-2 space-y-1 text-xs">
+          <div className="text-zinc-400 font-semibold text-[10px]">多选</div>
+          <div className="text-[10px] text-zinc-500">
+            已选中 {selectedArray.length} 个片段
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="text-[10px] text-zinc-500 px-3 py-2">
         选择一个 clip 查看属性
