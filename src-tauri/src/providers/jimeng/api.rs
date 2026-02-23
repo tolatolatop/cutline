@@ -8,7 +8,7 @@ use super::client::JimengClient;
 use super::constants::{
     get_aspect_ratio, resolve_model, APP_ID, AspectRatio, DRAFT_VERSION,
     SEEDANCE_DEFAULT_FPS, SEEDANCE_DEFAULT_DURATION_MS,
-    SEEDANCE_VERSION, SEEDANCE_MIN_FEATURE, SEEDANCE_VIDEO_MODE,
+    SEEDANCE_VIDEO_MODE,
     VIDEO_DRAFT_VERSION, VIDEO_MIN_VERSION, VIDEO_BENEFIT_TYPE, SEEDANCE_BENEFIT_TYPE,
 };
 
@@ -279,23 +279,17 @@ pub(crate) fn build_seedance_draft(
     video_task_extra: &str,
 ) -> String {
     let dur = duration_ms.unwrap_or(SEEDANCE_DEFAULT_DURATION_MS);
-    let seed: u64 = rand::thread_rng().gen_range(2_500_000_000..2_600_000_000);
+    let seed: u64 = rand::thread_rng().gen_range(1_000_000_000..2_600_000_000);
 
     let component_id = new_uuid();
-
-    let meta_list = if prompt.trim().is_empty() {
-        json!([])
-    } else {
-        json!([{ "meta_type": "text", "text": prompt.trim() }])
-    };
 
     let draft = json!({
         "type": "draft",
         "id": new_uuid(),
-        "min_version": SEEDANCE_VERSION,
-        "min_features": [SEEDANCE_MIN_FEATURE],
+        "min_version": VIDEO_MIN_VERSION,
+        "min_features": [],
         "is_from_tsn": true,
-        "version": SEEDANCE_VERSION,
+        "version": VIDEO_DRAFT_VERSION,
         "main_component_id": component_id,
         "component_list": [{
             "type": "video_base_component",
@@ -323,18 +317,12 @@ pub(crate) fn build_seedance_draft(
                         "video_gen_inputs": [{
                             "type": "",
                             "id": new_uuid(),
-                            "min_version": SEEDANCE_VERSION,
-                            "prompt": "",
+                            "min_version": VIDEO_MIN_VERSION,
+                            "prompt": prompt,
                             "video_mode": SEEDANCE_VIDEO_MODE,
                             "fps": SEEDANCE_DEFAULT_FPS,
                             "duration_ms": dur,
-                            "idip_meta_list": [],
-                            "unified_edit_input": {
-                                "type": "",
-                                "id": new_uuid(),
-                                "material_list": [],
-                                "meta_list": meta_list
-                            }
+                            "idip_meta_list": []
                         }],
                         "video_aspect_ratio": ratio,
                         "seed": seed,
@@ -363,16 +351,17 @@ pub(crate) fn build_seedance_metrics_extra(internal_model: &str, duration_ms: u3
             "extraVipFunctionKey": internal_model,
             "useVipFunctionDetailsReporterHoc": true
         },
-        "materialTypes": [1]
+        "materialTypes": []
     }]);
 
     json!({
+        "promptSource": "custom",
         "isDefaultSeed": 1,
         "originSubmitId": submit_id,
         "isRegenerate": false,
         "enterFrom": "click",
         "position": "page_bottom_box",
-        "functionMode": "omni_reference",
+        "functionMode": "first_last_frames",
         "sceneOptions": scene_options.to_string()
     })
     .to_string()
