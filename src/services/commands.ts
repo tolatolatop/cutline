@@ -136,6 +136,30 @@ export async function updateGenerationSettings(
 }
 
 // ============================================================
+// Note / Prompt Asset Commands
+// ============================================================
+
+export async function createNote(
+  text: string,
+  label?: string,
+  language?: string
+): Promise<Asset> {
+  return invoke("create_note", { text, label, language });
+}
+
+export async function updateNote(
+  assetId: string,
+  text: string,
+  label?: string
+): Promise<void> {
+  return invoke("update_note", { assetId, text, label });
+}
+
+export async function readNote(assetId: string): Promise<string> {
+  return invoke("read_note", { assetId });
+}
+
+// ============================================================
 // Generation / Export Commands
 // ============================================================
 

@@ -4,7 +4,15 @@ import { useThumbnail } from "../hooks/useThumbnail";
 import type { Asset, VideoMeta, AudioMeta } from "../models/project";
 
 type ViewMode = "grid" | "list";
-type FilterType = "all" | "video" | "audio" | "image";
+type FilterType = "all" | "video" | "audio" | "image" | "prompt";
+
+const FILTER_LABELS: Record<FilterType, string> = {
+  all: "全部",
+  video: "video",
+  audio: "audio",
+  image: "image",
+  prompt: "prompt",
+};
 
 function fileName(path: string) {
   return path.split(/[/\\]/).pop() || path;
@@ -35,6 +43,11 @@ function getResolution(asset: Asset): string | null {
     return `${vm.width}x${vm.height}`;
   }
   return null;
+}
+
+function getPromptLabel(asset: Asset): string {
+  const meta = asset.meta as unknown as Record<string, unknown>;
+  return (meta?.label as string) || "";
 }
 
 function assetIcon(type: string) {
@@ -75,6 +88,8 @@ function AssetGridCard({
   const thumbPath = getThumbRelativePath(asset);
   const duration = getDuration(asset);
   const resolution = getResolution(asset);
+  const isPrompt = asset.type === "prompt";
+  const promptLabel = isPrompt ? getPromptLabel(asset) : "";
 
   return (
     <div
@@ -84,8 +99,18 @@ function AssetGridCard({
         selected ? "border-blue-500" : "border-zinc-800 hover:border-zinc-600"
       }`}
     >
-      <div className="aspect-video bg-zinc-800 flex items-center justify-center">
-        {thumbPath ? (
+      <div className={`${isPrompt ? "aspect-[4/3]" : "aspect-video"} bg-zinc-800 flex items-center justify-center`}>
+        {isPrompt ? (
+          <div className="w-full h-full p-2 flex flex-col gap-1">
+            <span className="text-lg leading-none">📝</span>
+            {promptLabel && (
+              <div className="text-[10px] text-zinc-300 font-medium truncate">{promptLabel}</div>
+            )}
+            <div className="text-[9px] text-zinc-500 line-clamp-3 break-all">
+              {fileName(asset.path)}
+            </div>
+          </div>
+        ) : thumbPath ? (
           <ThumbnailImg
             relativePath={thumbPath}
             alt={fileName(asset.path)}
@@ -110,7 +135,7 @@ function AssetGridCard({
 
       <div className="px-1.5 py-1 bg-zinc-900">
         <div className="text-[11px] text-zinc-300 truncate">
-          {fileName(asset.path)}
+          {isPrompt ? (promptLabel || fileName(asset.path)) : fileName(asset.path)}
         </div>
       </div>
     </div>
@@ -130,6 +155,8 @@ function AssetListRow({
 }) {
   const thumbPath = getThumbRelativePath(asset);
   const duration = getDuration(asset);
+  const isPrompt = asset.type === "prompt";
+  const promptLabel = isPrompt ? getPromptLabel(asset) : "";
 
   return (
     <div
@@ -142,7 +169,7 @@ function AssetListRow({
       }`}
     >
       <div className="w-10 h-10 rounded bg-zinc-800 flex items-center justify-center overflow-hidden shrink-0">
-        {thumbPath ? (
+        {!isPrompt && thumbPath ? (
           <ThumbnailImg
             relativePath={thumbPath}
             className="w-full h-full object-cover"
@@ -153,7 +180,7 @@ function AssetListRow({
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-zinc-200 truncate text-xs">
-          {fileName(asset.path)}
+          {isPrompt ? (promptLabel || fileName(asset.path)) : fileName(asset.path)}
         </div>
         <div className="text-[10px] text-zinc-500 truncate">
           {asset.type}
@@ -216,8 +243,8 @@ export function AssetLibrary() {
       </div>
 
       {/* Filter bar */}
-      <div className="px-3 py-1 flex gap-1 border-b border-zinc-800">
-        {(["all", "video", "audio", "image"] as FilterType[]).map((f) => {
+      <div className="px-3 py-1 flex gap-1 border-b border-zinc-800 flex-wrap">
+        {(["all", "video", "audio", "image", "prompt"] as FilterType[]).map((f) => {
           const count =
             f === "all"
               ? projectFile.assets.length
@@ -233,7 +260,7 @@ export function AssetLibrary() {
                   : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
-              {f === "all" ? "全部" : f} ({count})
+              {FILTER_LABELS[f]} ({count})
             </button>
           );
         })}

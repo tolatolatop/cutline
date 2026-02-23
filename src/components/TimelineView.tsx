@@ -252,17 +252,30 @@ function ClipBlock({
       />
 
       {/* Clip content */}
-      <div className="flex items-center gap-1 px-1.5 h-full bg-zinc-700/80 overflow-hidden">
-        {thumbUrl && (
-          <img
-            src={thumbUrl}
-            className="w-8 h-8 rounded object-cover shrink-0"
-            alt=""
-          />
+      <div className={`flex items-center gap-1 px-1.5 h-full overflow-hidden ${
+        asset?.type === "prompt" ? "bg-amber-900/50" : "bg-zinc-700/80"
+      }`}>
+        {asset?.type === "prompt" ? (
+          <>
+            <span className="text-sm shrink-0">📝</span>
+            <span className="text-[10px] text-amber-200 truncate">
+              {(asset.meta as Record<string, unknown>)?.label as string || fileName(asset.path)}
+            </span>
+          </>
+        ) : (
+          <>
+            {thumbUrl && (
+              <img
+                src={thumbUrl}
+                className="w-8 h-8 rounded object-cover shrink-0"
+                alt=""
+              />
+            )}
+            <span className="text-[10px] text-zinc-300 truncate">
+              {asset ? fileName(asset.path) : clip.assetId}
+            </span>
+          </>
         )}
-        <span className="text-[10px] text-zinc-300 truncate">
-          {asset ? fileName(asset.path) : clip.assetId}
-        </span>
       </div>
 
       {/* Right trim handle */}
@@ -421,17 +434,17 @@ export function TimelineView() {
 
   const handleAddClip = useCallback(async () => {
     if (!projectFile || !selectedAssetId) return;
-    const videoTrack = projectFile.timeline.tracks.find(
-      (t) => t.type === "video"
-    );
-    if (!videoTrack) return;
+    const asset = projectFile.assets.find((a) => a.assetId === selectedAssetId);
+    if (!asset) return;
 
-    const endMs = Object.values(projectFile.timeline.clips)
-      .filter((c) => c.trackId === videoTrack.trackId)
-      .reduce((max, c) => Math.max(max, c.startMs + c.durationMs), 0);
+    const targetTrackType = asset.type === "prompt" ? "text" : asset.type === "audio" ? "audio" : "video";
+    const targetTrack = projectFile.timeline.tracks.find(
+      (t) => t.type === targetTrackType
+    );
+    if (!targetTrack) return;
 
     try {
-      await commands.timelineAddClip(videoTrack.trackId, selectedAssetId, endMs);
+      await commands.timelineAddClip(targetTrack.trackId, selectedAssetId, playheadMs);
     } catch (err) {
       console.error("Failed to add clip:", err);
     }

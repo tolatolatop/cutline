@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useProjectStore } from "../store/projectStore";
 import { useProviderStore } from "../store/providerStore";
+import { useTimelineViewStore } from "../store/timelineViewStore";
 import * as commands from "../services/commands";
 
 const VIDEO_MODELS = [
@@ -18,7 +19,7 @@ const RATIOS = [
 ];
 
 export function GeneratePanel() {
-  const { projectFile } = useProjectStore();
+  const { projectFile, refreshProject } = useProjectStore();
   const { providers, loadProviders } = useProviderStore();
 
   const [prompt, setPrompt] = useState("");
@@ -30,10 +31,16 @@ export function GeneratePanel() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ taskId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [noteSaved, setNoteSaved] = useState(false);
 
   useEffect(() => {
     loadProviders();
   }, [loadProviders]);
+
+  const promptAssets = useMemo(
+    () => projectFile?.assets.filter((a) => a.type === "prompt") ?? [],
+    [projectFile]
+  );
 
   const genVideoTask = projectFile?.tasks?.find(
     (t) => t.kind === "gen_video" && (t.state === "running" || t.state === "queued")
@@ -74,6 +81,33 @@ export function GeneratePanel() {
     }
   };
 
+  const handleSaveNote = async () => {
+    if (!prompt.trim() || !projectFile) return;
+    setNoteSaved(false);
+    try {
+      const asset = await commands.createNote(prompt.trim());
+      const textTrack = projectFile.timeline.tracks.find((t) => t.type === "text");
+      if (textTrack) {
+        const cursorMs = useTimelineViewStore.getState().playheadMs;
+        await commands.timelineAddClip(textTrack.trackId, asset.assetId, cursorMs);
+      }
+      setNoteSaved(true);
+      refreshProject();
+      setTimeout(() => setNoteSaved(false), 2000);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleLoadNote = async (assetId: string) => {
+    try {
+      const text = await commands.readNote(assetId);
+      setPrompt(text);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   if (!projectFile) {
     return (
       <div className="flex items-center justify-center h-full text-zinc-600 text-xs">
@@ -96,7 +130,44 @@ export function GeneratePanel() {
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {/* Prompt */}
         <div>
-          <label className="block text-[10px] text-zinc-500 mb-1">提示词</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[10px] text-zinc-500">提示词</label>
+            <div className="flex gap-1">
+              {promptAssets.length > 0 && (
+                <select
+                  data-testid="gen-load-note"
+                  onChange={(e) => {
+                    if (e.target.value) handleLoadNote(e.target.value);
+                    e.target.value = "";
+                  }}
+                  defaultValue=""
+                  className="bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[9px] text-zinc-400 focus:outline-none"
+                >
+                  <option value="" disabled>
+                    加载笔记...
+                  </option>
+                  {promptAssets.map((a) => {
+                    const meta = a.meta as Record<string, unknown>;
+                    const label = (meta?.label as string) || a.assetId;
+                    return (
+                      <option key={a.assetId} value={a.assetId}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
+              <button
+                data-testid="gen-save-note"
+                onClick={handleSaveNote}
+                disabled={!prompt.trim()}
+                className="px-1.5 py-0.5 text-[9px] rounded bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                title="保存为笔记"
+              >
+                {noteSaved ? "已保存" : "保存笔记"}
+              </button>
+            </div>
+          </div>
           <textarea
             data-testid="gen-prompt"
             value={prompt}

@@ -875,6 +875,125 @@ async fn marker_remove(
 }
 
 // ============================================================
+// Note / Prompt Asset Commands
+// ============================================================
+
+#[tauri::command]
+async fn create_note(
+    text: String,
+    label: Option<String>,
+    language: Option<String>,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<Asset, String> {
+    let mut guard = state.inner.lock().await;
+    let loaded = guard.as_mut().ok_or("没有打开的项目")?;
+
+    let asset_id = format!(
+        "ast_prompt_{}",
+        &uuid::Uuid::new_v4().to_string().replace("-", "")[..8]
+    );
+
+    let prompts_dir = loaded.project_dir.join("workspace/assets/prompts");
+    std::fs::create_dir_all(&prompts_dir)
+        .map_err(|e| format!("创建目录失败: {}", e))?;
+
+    let file_name = format!("{}.md", asset_id);
+    let dest_path = prompts_dir.join(&file_name);
+    std::fs::write(&dest_path, text.as_bytes())
+        .map_err(|e| format!("写入文件失败: {}", e))?;
+
+    let fp = asset::fingerprint::compute_content_fingerprint(text.as_bytes());
+    let relative_path = format!("workspace/assets/prompts/{}", file_name);
+    let lang = language.unwrap_or_else(|| "zh".to_string());
+    let lbl = label.unwrap_or_default();
+
+    let asset = Asset {
+        asset_id: asset_id.clone(),
+        asset_type: "prompt".to_string(),
+        source: "authored".to_string(),
+        fingerprint: fp,
+        path: relative_path,
+        meta: serde_json::json!({
+            "kind": "prompt",
+            "language": lang,
+            "format": "markdown",
+            "label": lbl,
+        }),
+        generation: None,
+        tags: vec!["prompt".to_string()],
+        created_at: chrono::Utc::now().to_rfc3339(),
+    };
+
+    loaded.project.assets.push(asset.clone());
+    loaded.project.rebuild_indexes();
+    loaded.dirty = true;
+
+    drop(guard);
+    let _ = app_handle.emit("project:updated", ());
+    state.save_notify.notify_one();
+
+    Ok(asset)
+}
+
+#[tauri::command]
+async fn update_note(
+    asset_id: String,
+    text: String,
+    label: Option<String>,
+    state: tauri::State<'_, Arc<AppState>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    let mut guard = state.inner.lock().await;
+    let loaded = guard.as_mut().ok_or("没有打开的项目")?;
+
+    let asset = loaded
+        .project
+        .assets
+        .iter_mut()
+        .find(|a| a.asset_id == asset_id && a.asset_type == "prompt")
+        .ok_or(format!("Prompt asset not found: {}", asset_id))?;
+
+    let dest_path = loaded.project_dir.join(&asset.path);
+    std::fs::write(&dest_path, text.as_bytes())
+        .map_err(|e| format!("写入文件失败: {}", e))?;
+
+    asset.fingerprint = asset::fingerprint::compute_content_fingerprint(text.as_bytes());
+
+    if let Some(lbl) = label {
+        asset.meta["label"] = serde_json::Value::String(lbl);
+    }
+
+    loaded.dirty = true;
+
+    drop(guard);
+    let _ = app_handle.emit("project:updated", ());
+    state.save_notify.notify_one();
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn read_note(
+    asset_id: String,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<String, String> {
+    let guard = state.inner.lock().await;
+    let loaded = guard.as_ref().ok_or("没有打开的项目")?;
+
+    let asset = loaded
+        .project
+        .assets
+        .iter()
+        .find(|a| a.asset_id == asset_id && a.asset_type == "prompt")
+        .ok_or(format!("Prompt asset not found: {}", asset_id))?;
+
+    let file_path = loaded.project_dir.join(&asset.path);
+    std::fs::read_to_string(&file_path)
+        .map_err(|e| format!("读取文件失败: {}", e))
+}
+
+// ============================================================
 // Project Settings Commands
 // ============================================================
 
@@ -1294,6 +1413,9 @@ pub fn run() {
             marker_add,
             marker_update,
             marker_remove,
+            create_note,
+            update_note,
+            read_note,
             update_generation_settings,
             providers_list,
             providers_get,
